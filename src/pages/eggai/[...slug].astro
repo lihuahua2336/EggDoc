@@ -1,0 +1,23 @@
+---
+import { getCollection, render } from "astro:content";
+import ArticleLayout from "@/layouts/ArticleLayout.astro";
+import { getGuideUrl, isPublished } from "@/lib/content";
+
+export async function getStaticPaths() {
+  const guides = await getCollection("guides", (entry) => {
+    return isPublished(entry) && entry.data.service === "eggai";
+  });
+
+  return guides.map((entry) => ({
+    params: { slug: getGuideUrl(entry).replace(/^\/eggai\//, "").replace(/\/$/, "") },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<ArticleLayout entry={entry}>
+  <Content />
+</ArticleLayout>

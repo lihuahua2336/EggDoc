@@ -1,0 +1,38 @@
+---
+import Header from "@/components/layout/Header.astro";
+import "@/styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "EggDoc",
+  description = "面向中文用户的 AI 产品教程、EggAi 接入指南与 AI 编程学习路径。",
+} = Astro.props;
+
+const pageTitle = title === "EggDoc" ? title : `${title} | EggDoc`;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{pageTitle}</title>
+    <script is:inline>
+      const theme = localStorage.getItem("theme") || "system";
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (theme === "dark" || (theme === "system" && prefersDark)) {
+        document.documentElement.classList.add("dark");
+      }
+    </script>
+  </head>
+  <body>
+    <Header />
+    <slot />
+  </body>
+</html>

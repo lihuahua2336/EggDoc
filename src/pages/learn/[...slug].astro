@@ -1,0 +1,21 @@
+---
+import { getCollection, render } from "astro:content";
+import ArticleLayout from "@/layouts/ArticleLayout.astro";
+import { getLessonUrl, isPublished } from "@/lib/content";
+
+export async function getStaticPaths() {
+  const lessons = await getCollection("lessons", isPublished);
+
+  return lessons.map((entry) => ({
+    params: { slug: getLessonUrl(entry).replace(/^\/learn\//, "").replace(/\/$/, "") },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<ArticleLayout entry={entry}>
+  <Content />
+</ArticleLayout>

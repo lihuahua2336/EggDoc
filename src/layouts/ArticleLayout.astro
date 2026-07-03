@@ -1,0 +1,60 @@
+---
+import { Badge } from "@/components/ui/badge";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { formatDate, type ContentEntry } from "@/lib/content";
+
+interface Props {
+  entry: ContentEntry;
+}
+
+const { entry } = Astro.props;
+---
+
+<BaseLayout title={entry.data.title} description={entry.data.description}>
+  <main class="mx-auto grid max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_16rem]">
+    <article class="min-w-0" data-pagefind-body>
+      <nav class="mb-8 text-sm text-muted-foreground">
+        <a href="/" class="hover:text-foreground">首页</a>
+        <span class="mx-2">/</span>
+        <span>{entry.data.title}</span>
+      </nav>
+      <header class="mb-8 border-b border-border pb-8">
+        <div class="mb-4 flex flex-wrap gap-2">
+          {entry.data.tags.map((tag) => (
+            <a href={`/tags/${tag}/`}>
+              <Badge variant="outline">{tag}</Badge>
+            </a>
+          ))}
+        </div>
+        <h1 class="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
+          {entry.data.title}
+        </h1>
+        <p class="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">
+          {entry.data.description}
+        </p>
+        <div class="mt-5 flex flex-wrap gap-4 text-sm text-muted-foreground">
+          <span>发布于 {formatDate(entry.data.publishedAt)}</span>
+          <span>更新于 {formatDate(entry.data.updatedAt)}</span>
+        </div>
+      </header>
+      <div class="prose max-w-none">
+        <slot />
+      </div>
+    </article>
+    <aside class="hidden lg:block">
+      <div class="sticky top-24 rounded-lg border border-border bg-card p-4">
+        <p class="text-sm font-medium">本文信息</p>
+        <dl class="mt-4 space-y-3 text-sm text-muted-foreground">
+          <div>
+            <dt class="text-xs uppercase tracking-wide">类型</dt>
+            <dd class="mt-1">{entry.data.type}</dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wide">标签</dt>
+            <dd class="mt-1">{entry.data.tags.join(", ")}</dd>
+          </div>
+        </dl>
+      </div>
+    </aside>
+  </main>
+</BaseLayout>

@@ -1,0 +1,28 @@
+---
+import { Badge } from "@/components/ui/badge";
+import {
+  formatDate,
+  getEntryUrl,
+  type ContentEntry,
+} from "@/lib/content";
+
+interface Props {
+  entry: ContentEntry;
+}
+
+const { entry } = Astro.props;
+const url = getEntryUrl(entry);
+---
+
+<article class="rounded-lg border border-border bg-card p-5 transition-colors hover:border-primary/50">
+  <div class="mb-3 flex flex-wrap items-center gap-2">
+    {entry.data.tags.slice(0, 3).map((tag) => <Badge variant="outline">{tag}</Badge>)}
+  </div>
+  <h3 class="text-lg font-semibold leading-tight">
+    <a href={url} class="hover:text-primary">{entry.data.title}</a>
+  </h3>
+  <p class="mt-2 text-sm leading-6 text-muted-foreground">{entry.data.description}</p>
+  <div class="mt-4 text-xs text-muted-foreground">
+    更新于 {formatDate(entry.data.updatedAt)}
+  </div>
+</article>
