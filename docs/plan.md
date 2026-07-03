@@ -18,10 +18,7 @@ Task-oriented documentation for setup, configuration, integration, and troublesh
 
 Examples:
 
-- Configure EggAi in Cursor
-- Configure EggAi in Cherry Studio
-- Use EggAi with an OpenAI-compatible SDK
-- Troubleshoot common API key or base URL errors
+- Install and configure Codex for EggAi with a hosted script
 
 **Lesson**
 
@@ -82,10 +79,7 @@ Recommended content directory:
 src/content/
   guides/
     eggai/
-      cursor.md
-      cherry-studio.md
-      openai-sdk.md
-      troubleshooting.md
+      codex-installer.md
   lessons/
     ai-programming/
       01-codex-install.md
@@ -105,8 +99,8 @@ All content should be validated with TypeScript schemas.
 Shared fields:
 
 ```yaml
-title: 在 Cursor 中配置 EggAi
-description: 使用 EggAi 中转 API 连接 Cursor 的配置步骤
+title: 用脚本把 Codex 接入 EggAi
+description: 通过脚本安装或更新 Codex，并写入 EggAi Base URL 和 API Key。
 publishedAt: 2026-07-03
 updatedAt: 2026-07-03
 tags: [eggai, cursor, api]
@@ -192,6 +186,8 @@ Main navigation is manual. Content navigation is generated from metadata:
 - Tag pages
 - Related content
 
+Lessons, guides, and notes may also link to each other directly in the article body when one piece is a useful prerequisite, setup path, or follow-up. Direct editorial links should explain the relationship; generated related content remains a secondary discovery aid.
+
 ## Search
 
 Search is part of the MVP. Use Pagefind to build a static search index after Astro generates the site.
@@ -207,6 +203,25 @@ Search should cover:
 - Tags
 
 The UI can start as a search button in the header that opens a search dialog or links to a dedicated search page.
+
+## EggAi Codex Setup Scripts
+
+EggDoc should host thin installer scripts for Codex + EggAi setup:
+
+- `/install/codex.sh` for Linux and macOS shell usage
+- `/install/codex.ps1` for Windows PowerShell usage
+
+The scripts should accept:
+
+- `sk-key` / `SK_KEY` as the required EggAi API Key
+- `baseurl` / `BASE_URL`, defaulting to `https://api.eggai.icu/v1`
+- `language` / `LANGUAGE`, supporting `zh-cn` and `en-us`
+
+The Linux script should be usable through `curl -fsSL ... | sh -s -- ...`.
+
+The Windows script should be usable through `irm ... | iex`. It should check whether `winget` is available, try to repair App Installer when `winget` is missing, report a clear error when repair fails, then install or update Codex and write the EggAi Codex configuration.
+
+Both scripts should update `~/.codex/config.toml` and use Codex's own API-key login flow to update `~/.codex/auth.json`, rather than asking readers to hand-edit secrets.
 
 ## Visual Direction
 
@@ -257,10 +272,7 @@ The first usable version should include:
 
 Suggested first content:
 
-- EggAi: What is EggAi?
-- EggAi: Configure EggAi in Cursor
-- EggAi: Configure EggAi in Cherry Studio
-- EggAi: Common configuration errors
+- EggAi: Use the Codex setup script
 - AI Programming: Install and configure Codex
 - AI Programming: What is AI programming?
 - AI Programming: Build EggDoc with Astro and shadcn/ui

@@ -28,6 +28,15 @@ Content lives in `src/content` and is validated by `src/content.config.ts`.
 
 Markdown is the default format. Use MDX only when an article needs richer presentation.
 
+## Hosted Installers
+
+Static installer assets live in `public/install`.
+
+- `/install/codex.sh` configures Codex for EggAi from Linux or macOS shells.
+- `/install/codex.ps1` configures Codex for EggAi from Windows PowerShell.
+
+Both installers accept an EggAi API key, an optional Base URL, and a language choice, then update the local Codex configuration. They also support dry-run mode for checking the planned install source and config changes without writing files or storing credentials.
+
 ## Deployment
 
 The site builds to static assets in `dist/`, making it suitable for Cloudflare Pages now and portable VPS static hosting later.

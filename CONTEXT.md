@@ -16,6 +16,14 @@ _Avoid_: Blog post, note
 A practical article that shows readers how to configure a service, API distribution site, or AI tool inside another application or workflow.
 _Avoid_: Website tutorial, setup note
 
+**Codex Setup Script**:
+A reader-facing installer script that turns Codex + EggAi setup into a parameterized install/update flow.
+_Avoid_: Shell snippet, manual Codex tutorial
+
+**EggAi Provider**:
+The Codex model-provider configuration that points Codex at EggAi's OpenAI-compatible API endpoint.
+_Avoid_: OpenAI account, generic proxy
+
 **Maintainer**:
 The person who collects, writes, edits, and publishes EggDoc content through the project repository.
 _Avoid_: User, contributor, editor role
