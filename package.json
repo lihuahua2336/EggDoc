@@ -8,7 +8,8 @@
     "build": "astro check && astro build",
     "preview": "astro preview",
     "check": "astro check",
-    "postbuild": "pagefind --site dist"
+    "postbuild": "pagefind --site dist",
+    "deploy:cloudflare": "npm run build && npx --yes wrangler pages deploy dist"
   },
   "dependencies": {
     "@astrojs/mdx": "^7.0.2",
