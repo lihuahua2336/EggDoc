@@ -126,3 +126,17 @@ pre {
   padding: 0.15rem 0.35rem;
   font-size: 0.9em;
 }
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+mark {
+  border-radius: 0.25rem;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  padding: 0 0.2rem;
+}

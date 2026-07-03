@@ -1,7 +1,7 @@
 ---
 import { getCollection, render } from "astro:content";
 import ArticleLayout from "@/layouts/ArticleLayout.astro";
-import { getNoteUrl, isPublished } from "@/lib/content";
+import { getNoteUrl, getRelatedEntries, isPublished } from "@/lib/content";
 
 export async function getStaticPaths() {
   const notes = await getCollection("notes", isPublished);
@@ -13,9 +13,10 @@ export async function getStaticPaths() {
 }
 
 const { entry } = Astro.props;
-const { Content } = await render(entry);
+const { Content, headings } = await render(entry);
+const related = await getRelatedEntries(entry);
 ---
 
-<ArticleLayout entry={entry}>
+<ArticleLayout entry={entry} headings={headings} related={related}>
   <Content />
 </ArticleLayout>

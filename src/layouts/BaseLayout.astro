@@ -5,14 +5,23 @@ import "@/styles/global.css";
 interface Props {
   title?: string;
   description?: string;
+  canonicalPath?: string;
+  image?: string;
+  type?: "website" | "article";
 }
 
 const {
   title = "EggDoc",
   description = "面向中文用户的 AI 产品教程、EggAi 接入指南与 AI 编程学习路径。",
+  canonicalPath = Astro.url.pathname,
+  image,
+  type = "website",
 } = Astro.props;
 
 const pageTitle = title === "EggDoc" ? title : `${title} | EggDoc`;
+const siteOrigin = Astro.site ?? Astro.url.origin;
+const canonicalUrl = new URL(canonicalPath, siteOrigin);
+const imageUrl = image ? new URL(image, siteOrigin) : undefined;
 ---
 
 <!doctype html>
@@ -22,6 +31,17 @@ const pageTitle = title === "EggDoc" ? title : `${title} | EggDoc`;
     <meta name="description" content={description} />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="generator" content={Astro.generator} />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    {imageUrl && <meta property="og:image" content={imageUrl} />}
+    <meta name="twitter:card" content={imageUrl ? "summary_large_image" : "summary"} />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    {imageUrl && <meta name="twitter:image" content={imageUrl} />}
     <title>{pageTitle}</title>
     <script is:inline>
       const theme = localStorage.getItem("theme") || "system";

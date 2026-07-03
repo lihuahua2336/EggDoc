@@ -1,16 +1,38 @@
 ---
 import { Badge } from "@/components/ui/badge";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { formatDate, type ContentEntry } from "@/lib/content";
+import {
+  formatDate,
+  getEntryKindLabel,
+  getEntryUrl,
+  type AdjacentEntries,
+  type ContentEntry,
+} from "@/lib/content";
+
+type Heading = {
+  depth: number;
+  slug: string;
+  text: string;
+};
 
 interface Props {
   entry: ContentEntry;
+  headings?: Heading[];
+  adjacent?: AdjacentEntries;
+  related?: ContentEntry[];
 }
 
-const { entry } = Astro.props;
+const { entry, headings = [], adjacent = {}, related = [] } = Astro.props;
+const toc = headings.filter((heading) => heading.depth >= 2 && heading.depth <= 3);
+const canonicalPath = getEntryUrl(entry);
 ---
 
-<BaseLayout title={entry.data.title} description={entry.data.description}>
+<BaseLayout
+  title={entry.data.title}
+  description={entry.data.description}
+  canonicalPath={canonicalPath}
+  type="article"
+>
   <main class="mx-auto grid max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_16rem]">
     <article class="min-w-0" data-pagefind-body>
       <nav class="mb-8 text-sm text-muted-foreground">
@@ -40,20 +62,87 @@ const { entry } = Astro.props;
       <div class="prose max-w-none">
         <slot />
       </div>
+      {
+        (adjacent.previous || adjacent.next) && (
+          <nav class="mt-12 grid gap-4 border-t border-border pt-8 md:grid-cols-2" aria-label="课程导航">
+            <div>
+              {adjacent.previous && (
+                <a
+                  class="block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/50"
+                  href={getEntryUrl(adjacent.previous)}
+                >
+                  <span class="text-xs text-muted-foreground">上一节</span>
+                  <p class="mt-2 font-medium">{adjacent.previous.data.title}</p>
+                </a>
+              )}
+            </div>
+            <div>
+              {adjacent.next && (
+                <a
+                  class="block rounded-lg border border-border bg-card p-4 text-right transition-colors hover:border-primary/50"
+                  href={getEntryUrl(adjacent.next)}
+                >
+                  <span class="text-xs text-muted-foreground">下一节</span>
+                  <p class="mt-2 font-medium">{adjacent.next.data.title}</p>
+                </a>
+              )}
+            </div>
+          </nav>
+        )
+      }
+      {
+        related.length > 0 && (
+          <section class="mt-12 border-t border-border pt-8">
+            <h2 class="text-xl font-semibold">继续阅读</h2>
+            <div class="mt-4 grid gap-4 md:grid-cols-3">
+              {related.map((item) => (
+                <a
+                  class="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/50"
+                  href={getEntryUrl(item)}
+                >
+                  <span class="text-xs text-muted-foreground">{getEntryKindLabel(item)}</span>
+                  <p class="mt-2 font-medium leading-6">{item.data.title}</p>
+                  <p class="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">
+                    {item.data.description}
+                  </p>
+                </a>
+              ))}
+            </div>
+          </section>
+        )
+      }
     </article>
     <aside class="hidden lg:block">
-      <div class="sticky top-24 rounded-lg border border-border bg-card p-4">
-        <p class="text-sm font-medium">本文信息</p>
-        <dl class="mt-4 space-y-3 text-sm text-muted-foreground">
-          <div>
-            <dt class="text-xs uppercase tracking-wide">类型</dt>
-            <dd class="mt-1">{entry.data.type}</dd>
-          </div>
-          <div>
-            <dt class="text-xs uppercase tracking-wide">标签</dt>
-            <dd class="mt-1">{entry.data.tags.join(", ")}</dd>
-          </div>
-        </dl>
+      <div class="sticky top-24 space-y-4">
+        {
+          toc.length > 0 && (
+            <nav class="rounded-lg border border-border bg-card p-4" aria-label="文章目录">
+              <p class="text-sm font-medium">目录</p>
+              <ol class="mt-3 space-y-2 text-sm text-muted-foreground">
+                {toc.map((heading) => (
+                  <li class={heading.depth === 3 ? "pl-3" : ""}>
+                    <a class="hover:text-foreground" href={`#${heading.slug}`}>
+                      {heading.text}
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          )
+        }
+        <div class="rounded-lg border border-border bg-card p-4">
+          <p class="text-sm font-medium">本文信息</p>
+          <dl class="mt-4 space-y-3 text-sm text-muted-foreground">
+            <div>
+              <dt class="text-xs uppercase tracking-wide">类型</dt>
+              <dd class="mt-1">{getEntryKindLabel(entry)}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide">标签</dt>
+              <dd class="mt-1">{entry.data.tags.join(", ")}</dd>
+            </div>
+          </dl>
+        </div>
       </div>
     </aside>
   </main>
