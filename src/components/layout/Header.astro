@@ -1,5 +1,6 @@
 ---
 import { Search } from "lucide-react";
+import { AuthStatus } from "@/components/auth/AuthStatus";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navItems = [
@@ -41,6 +42,7 @@ const navItems = [
         <Search className="h-4 w-4" />
       </a>
       <ThemeToggle client:load />
+      <AuthStatus client:load />
     </div>
   </div>
 </header>

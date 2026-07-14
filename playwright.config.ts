@@ -11,11 +11,18 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:4322",
     trace: "on-first-retry",
   },
-  webServer: {
-    command: "npm.cmd run preview -- --host 127.0.0.1 --port 4322",
-    url: "http://127.0.0.1:4322/eggai/codex-installer/",
-    reuseExistingServer: false,
-  },
+  webServer: [
+    {
+      command: "node tests/fixtures/mock-logto.mjs",
+      url: "http://127.0.0.1:4323/health",
+      reuseExistingServer: false,
+    },
+    {
+      command: "node tests/fixtures/start-preview.mjs",
+      url: "http://127.0.0.1:4322/eggai/codex-installer/",
+      reuseExistingServer: false,
+    },
+  ],
   projects: [
     {
       name: "chromium",

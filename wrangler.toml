@@ -1,2 +1,11 @@
 name = "eggdoc"
 compatibility_date = "2026-07-03"
+
+[env.test.vars]
+EGGDOC_OIDC_ISSUER = "http://127.0.0.1:4323"
+EGGDOC_OIDC_CLIENT_ID = "eggdoc-test-client"
+EGGDOC_OIDC_CLIENT_SECRET = "eggdoc-test-secret"
+EGGDOC_OIDC_RESOURCE = "https://api.eggai.icu"
+EGGDOC_OIDC_SCOPES = "openid profile offline_access read:ecosystem"
+EGGDOC_SESSION_SECRET = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY"
+EGGDOC_EGGAI_PLATFORM_URL = "https://api.eggai.icu"

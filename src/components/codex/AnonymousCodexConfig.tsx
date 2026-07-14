@@ -1,4 +1,4 @@
-import { Check, Copy, KeyRound } from "lucide-react";
+import { Check, Copy, KeyRound, LogIn } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ export function AnonymousCodexConfig() {
 
   return (
     <section
+      id="codex-config"
       aria-labelledby="anonymous-codex-config-title"
       className="not-prose my-8 overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
     >
@@ -74,6 +75,15 @@ export function AnonymousCodexConfig() {
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
               登录 EggAi 后可自动填入你的配置；不登录也可以复制下面的公开示例。
             </p>
+            <Button asChild className="mt-3" size="sm" variant="outline">
+              <a
+                aria-label="登录 EggAi"
+                href="/auth/login?returnTo=%2Feggai%2Fcodex-installer%2F%23codex-config"
+              >
+                <LogIn aria-hidden="true" className="h-4 w-4" />
+                登录 EggAi
+              </a>
+            </Button>
           </div>
         </div>
       </header>

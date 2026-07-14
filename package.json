@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
+    "build:test": "cross-env CLOUDFLARE_ENV=test astro check && cross-env CLOUDFLARE_ENV=test astro build && pagefind --site dist/client",
     "preview": "astro preview",
     "check": "astro check",
-    "test": "npm run build && playwright test",
-    "test:e2e": "npm run build && playwright test tests/e2e",
+    "test": "npm run build:test && playwright test",
+    "test:e2e": "npm run build:test && playwright test tests/e2e",
     "test:preview": "npm run build && playwright test tests/preview",
     "postbuild": "pagefind --site dist/client",
     "deploy:cloudflare": "npm run build && wrangler deploy"
@@ -25,6 +26,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.23.0",
+    "openid-client": "^6.8.4",
     "pagefind": "^1.5.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -37,6 +39,8 @@
     "@playwright/test": "^1.61.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "cross-env": "^10.1.0",
+    "jose": "^6.2.2",
     "typescript": "^6.0.3",
     "wrangler": "^4.110.0",
     "yaml": "^2.9.0"
