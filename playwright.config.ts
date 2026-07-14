@@ -13,7 +13,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "node tests/fixtures/mock-logto.mjs",
+      command: "node tests/fixtures/mock-eggai-services.mjs",
       url: "http://127.0.0.1:4323/health",
       reuseExistingServer: false,
     },

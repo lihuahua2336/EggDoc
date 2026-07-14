@@ -40,6 +40,11 @@ export default defineConfig({
         access: "secret",
         optional: true,
       }),
+      EGGDOC_EGGAI_ECOSYSTEM_URL: envField.string({
+        context: "server",
+        access: "secret",
+        optional: true,
+      }),
     },
   },
   site: "https://eggdoc.pages.dev",

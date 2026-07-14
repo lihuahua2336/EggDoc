@@ -2,13 +2,14 @@ import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
-const port = Number(process.env.MOCK_LOGTO_PORT ?? 4323);
+const port = Number(process.env.MOCK_EGGAI_SERVICES_PORT ?? 4323);
 const issuer = `http://127.0.0.1:${port}`;
 const authorizationCodes = new Map();
 const { privateKey, publicKey } = await generateKeyPair("RS256");
 const publicJwk = await exportJWK(publicKey);
 const keyId = "eggdoc-test-key";
 const stats = { globalLogoutCount: 0, refreshGrantCount: 0 };
+const ecosystem = { accountRequestCount: 0, mode: "active" };
 
 function redirect(response, location) {
   response.writeHead(302, { location });
@@ -59,6 +60,19 @@ const server = createServer((request, response) => {
     return;
   }
 
+  if (url.pathname === "/control/ecosystem") {
+    if (request.method === "POST") {
+      ecosystem.accountRequestCount = 0;
+      ecosystem.mode = url.searchParams.get("mode") ?? "active";
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify(ecosystem));
+    return;
+  }
+
   if (url.pathname === "/control/reset" && request.method === "POST") {
     stats.globalLogoutCount = 0;
     stats.refreshGrantCount = 0;
@@ -71,6 +85,38 @@ const server = createServer((request, response) => {
     stats.globalLogoutCount += 1;
     response.writeHead(204);
     response.end();
+    return;
+  }
+
+  if (url.pathname === "/api/ecosystem/me") {
+    ecosystem.accountRequestCount += 1;
+    if (!request.headers.authorization?.startsWith("Bearer fixture-access-token")) {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ success: false, message: "fixture bearer token rejected" }));
+      return;
+    }
+    if (ecosystem.mode === "inactive") {
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ success: false, message: "fixture account does not exist" }));
+      return;
+    }
+    if (ecosystem.mode === "authorization-expired") {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ success: false, message: "fixture upstream authorization detail" }));
+      return;
+    }
+    if (ecosystem.mode === "unavailable" || (ecosystem.mode === "retry" && ecosystem.accountRequestCount === 1)) {
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ success: false, message: "fixture upstream deployment detail" }));
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        success: true,
+        data: { id: 42, username: "fixture-new-api-account" },
+      }),
+    );
     return;
   }
 
@@ -207,7 +253,7 @@ const server = createServer((request, response) => {
 });
 
 server.listen(port, "127.0.0.1", () => {
-  process.stdout.write(`mock Logto listening on ${issuer}\n`);
+  process.stdout.write(`mock EggAi services listening on ${issuer}\n`);
 });
 
 function shutdown() {
