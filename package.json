@@ -8,10 +8,14 @@
     "build": "astro check && astro build",
     "preview": "astro preview",
     "check": "astro check",
-    "postbuild": "pagefind --site dist",
-    "deploy:cloudflare": "npm run build && npx --yes wrangler pages deploy dist"
+    "test": "npm run build && playwright test",
+    "test:e2e": "npm run build && playwright test tests/e2e",
+    "test:preview": "npm run build && playwright test tests/preview",
+    "postbuild": "pagefind --site dist/client",
+    "deploy:cloudflare": "npm run build && wrangler deploy"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^14.1.3",
     "@astrojs/mdx": "^7.0.2",
     "@astrojs/react": "^6.0.1",
     "@astrojs/sitemap": "^3.7.3",
@@ -30,8 +34,11 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
+    "@playwright/test": "^1.61.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrangler": "^4.110.0",
+    "yaml": "^2.9.0"
   }
 }

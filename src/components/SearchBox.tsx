@@ -126,7 +126,8 @@ export function SearchBox() {
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
         <input
           autoComplete="off"
-          className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none"
+          className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none disabled:cursor-wait"
+          disabled={state !== "ready"}
           id="search-input"
           onChange={(event) => setQuery(event.target.value)}
           placeholder="搜索 Codex、EggAi、MCP..."

@@ -12,6 +12,10 @@ app: codex
 order: 40
 ---
 
+import { AnonymousCodexConfig } from "@/components/codex/AnonymousCodexConfig";
+
+<AnonymousCodexConfig client:load />
+
 如果你希望 Codex 直接走 EggAi，可以使用 EggDoc 托管的安装脚本。脚本会完成三件事：
 
 1. 安装或更新 Codex。
