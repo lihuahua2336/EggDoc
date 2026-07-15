@@ -1,13 +1,14 @@
 import {
   Check,
+  ChevronDown,
   CircleAlert,
   CircleCheck,
   Copy,
   ExternalLink,
-  KeyRound,
   LoaderCircle,
   LogIn,
   RefreshCw,
+  Terminal,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -62,28 +63,18 @@ function useCopyValue(value: string) {
 
 function CopyableCommand({
   command,
-  copyButtonLabel,
-  getCopyValue,
-  statusResetKey,
   title,
 }: {
   command: string;
-  copyButtonLabel?: string;
-  getCopyValue?: () => string;
-  statusResetKey?: string;
   title: string;
 }) {
-  const { copyValue, status } = useCopyAction(
-    () => getCopyValue?.() ?? command,
-    statusResetKey ?? command,
-  );
+  const { copyValue, status } = useCopyValue(command);
 
   return (
     <div className="min-w-0 sm:col-span-2">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium">{title}</p>
         <Button
-          aria-label={status === "copied" ? `${title}已复制` : copyButtonLabel}
           onClick={copyValue}
           size="sm"
           type="button"
@@ -102,6 +93,53 @@ function CopyableCommand({
       </pre>
       {status === "error" && (
         <p className="mt-2 text-sm text-destructive" role="status">
+          复制失败，请手动选择命令。
+        </p>
+      )}
+    </div>
+  );
+}
+
+function QuickCopyCommand({
+  command,
+  getCopyValue,
+  statusResetKey,
+}: {
+  command: string;
+  getCopyValue: () => string;
+  statusResetKey: string;
+}) {
+  const { copyValue, status } = useCopyAction(getCopyValue, statusResetKey);
+
+  return (
+    <div className="mt-5 min-w-0 overflow-hidden rounded-md border border-white/15 bg-black/20">
+      <div className="flex min-w-0 items-stretch">
+        <pre
+          className="min-w-0 flex-1 overflow-x-auto bg-transparent px-4 py-3 text-xs leading-6 text-neutral-100 sm:text-sm"
+          data-testid="shell-quick-command"
+        >
+          <code>{command}</code>
+        </pre>
+        <div className="flex shrink-0 items-center border-l border-white/10 px-2">
+          <Button
+            aria-label={status === "copied" ? "一键配置命令已复制" : "复制一键配置命令"}
+            className="border-white/15 bg-white/5 text-neutral-100 hover:bg-white/10 hover:text-white"
+            onClick={copyValue}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {status === "copied" ? (
+              <Check aria-hidden="true" className="h-4 w-4" />
+            ) : (
+              <Copy aria-hidden="true" className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">{status === "copied" ? "已复制" : "复制"}</span>
+          </Button>
+        </div>
+      </div>
+      {status === "error" && (
+        <p className="border-t border-white/10 px-4 py-2 text-sm text-red-300" role="status">
           复制失败，请手动选择命令。
         </p>
       )}
@@ -292,7 +330,6 @@ export function EggAiCodexConfig() {
     }
   }
 
-  let panelTitle = "Codex 配置";
   let accountAction;
   if (accountState.kind === "loading") {
     accountAction = (
@@ -302,7 +339,6 @@ export function EggAiCodexConfig() {
       </p>
     );
   } else if (accountState.kind === "anonymous") {
-    panelTitle = "Codex 匿名配置";
     accountAction = (
       <>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
@@ -365,7 +401,6 @@ export function EggAiCodexConfig() {
       </>
     );
   } else if (accountState.kind === "reauthorization-required") {
-    panelTitle = "Codex 匿名配置";
     accountAction = (
       <>
         <p className="mt-1 inline-flex items-center gap-2 text-sm font-medium">
@@ -402,78 +437,30 @@ export function EggAiCodexConfig() {
   return (
     <section
       id="codex-config"
-      aria-labelledby="codex-config-title"
-      className="not-prose my-8 overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
+      aria-label={
+        accountState.kind === "anonymous" || accountState.kind === "reauthorization-required"
+          ? "Codex 匿名配置"
+          : "Codex 配置"
+      }
+      className="not-prose my-8 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 text-neutral-50"
     >
-      <header className="border-b border-border bg-muted/40 px-4 py-4 sm:px-5">
-        <div className="flex items-center gap-3">
-          <KeyRound aria-hidden="true" className="h-5 w-5 text-primary" />
-          <div>
-            <h2 id="codex-config-title" className="text-base font-semibold">
-              {panelTitle}
-            </h2>
-            {accountAction}
-          </div>
+      <div className="px-4 py-5 sm:px-7 sm:py-7">
+        <div className="flex items-center gap-2 text-xs font-medium text-neutral-400">
+          <Terminal aria-hidden="true" className="h-4 w-4" />
+          <span>QUICK START</span>
+          <span className="rounded border border-orange-400/30 bg-orange-400/15 px-2 py-0.5 text-orange-200">
+            推荐 · 最省事
+          </span>
         </div>
-      </header>
+        <h2 className="mt-3 text-xl font-semibold sm:text-2xl">一键配置</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-300">
+          {selectedCredential
+            ? "已填入当前 EggAi API Credential。复制命令后，粘贴到 macOS 或 Linux 终端运行即可。"
+            : "复制命令后，将示例 API Key 替换为你的 EggAi API Key，再粘贴到 macOS 或 Linux 终端运行。"}
+        </p>
 
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 p-4 sm:grid-cols-2 sm:p-5 [&>*]:min-w-0">
-        {selectedCredential && accountState.kind === "active" ? (
-          <CredentialDetails
-            credential={selectedCredential}
-            credentials={accountState.credentials}
-            modelSummary={accountState.modelSummary}
-            onCredentialChange={selectCredential}
-          />
-        ) : (
-          <div className="sm:col-span-2">
-            <p className="text-xs font-medium text-muted-foreground">Configuration Placeholder</p>
-            <p className="mt-2 text-sm font-medium text-destructive">这不是可用密钥</p>
-          </div>
-        )}
-
-        <CopyableValue
-          buttonLabel="API Key"
-          displayAsCode
-          inputLabel="Selected API Credential"
-          value={configurationApiKey}
-        />
-        <CopyableValue
-          buttonLabel="Base URL"
-          inputLabel="EggAi Base URL"
-          value={configurationBaseUrl}
-        />
-
-        <div className="sm:col-span-2">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor="codex-language">
-            Codex 默认语言
-          </label>
-          <select
-            className="mt-2 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
-            id="codex-language"
-            onChange={(event) => selectLanguage(event.target.value as CodexLanguage)}
-            value={language}
-          >
-            <option value="zh-cn">简体中文 (zh-cn)</option>
-            <option value="en-us">English (en-us)</option>
-          </select>
-        </div>
-
-        <CopyableCommand command={codexConfigToml} title="config.toml" />
-
-        <div className="sm:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm leading-6">
-          <p className="flex items-start gap-2">
-            <CircleAlert aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
-            <span>
-              点击“复制完整 Shell 命令”时，生成的命令会包含 API Key。复制后，剪贴板、shell
-              history、截图或分享的命令都可能暴露密钥。
-            </span>
-          </p>
-        </div>
-
-        <CopyableCommand
+        <QuickCopyCommand
           command={shellCommandPreview}
-          copyButtonLabel="复制完整 Shell 命令"
           getCopyValue={() =>
             buildShellInstallCommand({
               apiKey: configurationApiKey,
@@ -483,10 +470,73 @@ export function EggAiCodexConfig() {
             })
           }
           statusResetKey={`${configurationApiKey}\u0000${configurationBaseUrl}\u0000${language}`}
-          title="完整 Shell 命令"
         />
-        <CopyableCommand command={POWERSHELL_INSTALL_COMMAND} title="PowerShell 示例" />
+
+        <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-neutral-400">
+          <CircleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
+          <span>复制后的完整命令可能包含 API Key，请留意剪贴板和 shell history 风险。</span>
+        </p>
       </div>
+
+      <div className="border-t border-border bg-card px-4 py-4 text-card-foreground sm:px-7">
+        {accountAction}
+      </div>
+
+      <details className="group border-t border-neutral-800 bg-card text-card-foreground">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium sm:px-7">
+          <span>配置详情</span>
+          <ChevronDown
+            aria-hidden="true"
+            className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+          />
+        </summary>
+
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-t border-border p-4 sm:grid-cols-2 sm:p-7 [&>*]:min-w-0">
+          {selectedCredential && accountState.kind === "active" ? (
+            <CredentialDetails
+              credential={selectedCredential}
+              credentials={accountState.credentials}
+              modelSummary={accountState.modelSummary}
+              onCredentialChange={selectCredential}
+            />
+          ) : (
+            <div className="sm:col-span-2">
+              <p className="text-xs font-medium text-muted-foreground">Configuration Placeholder</p>
+              <p className="mt-2 text-sm font-medium text-destructive">这不是可用密钥</p>
+            </div>
+          )}
+
+          <CopyableValue
+            buttonLabel="API Key"
+            displayAsCode
+            inputLabel="Selected API Credential"
+            value={configurationApiKey}
+          />
+          <CopyableValue
+            buttonLabel="Base URL"
+            inputLabel="EggAi Base URL"
+            value={configurationBaseUrl}
+          />
+
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="codex-language">
+              Codex 默认语言
+            </label>
+            <select
+              className="mt-2 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              id="codex-language"
+              onChange={(event) => selectLanguage(event.target.value as CodexLanguage)}
+              value={language}
+            >
+              <option value="zh-cn">简体中文 (zh-cn)</option>
+              <option value="en-us">English (en-us)</option>
+            </select>
+          </div>
+
+          <CopyableCommand command={codexConfigToml} title="config.toml" />
+          <CopyableCommand command={POWERSHELL_INSTALL_COMMAND} title="PowerShell 示例" />
+        </div>
+      </details>
     </section>
   );
 }

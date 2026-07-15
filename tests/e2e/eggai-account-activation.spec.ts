@@ -84,7 +84,10 @@ test("expired ecosystem authorization becomes a local reauthorization state", as
     "href",
     "/auth/login?returnTo=%2Feggai%2Fcodex-installer%2F%23codex-config&reauthorize=1",
   );
-  await expect(panel.getByText("sk-EGGDOC-EXAMPLE-REPLACE-ME", { exact: true })).toBeVisible();
+  await panel.getByText("配置详情", { exact: true }).click();
+  await expect(panel.getByTestId("shell-quick-command")).toContainText(
+    "sk-EGGDOC-EXAMPLE-REPLACE-ME",
+  );
   await expect(page.getByText("fixture upstream authorization detail")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "用脚本把 Codex 接入 EggAi" })).toBeVisible();
 });
@@ -98,7 +101,9 @@ test("a temporary ecosystem outage stays inside the panel and can be retried", a
 
   const panel = page.getByRole("region", { name: "Codex 配置" });
   await expect(panel.getByText("暂时无法检查 EggAi API Account")).toBeVisible();
-  await expect(panel.getByText("sk-EGGDOC-EXAMPLE-REPLACE-ME", { exact: true })).toBeVisible();
+  await expect(panel.getByTestId("shell-quick-command")).toContainText(
+    "sk-EGGDOC-EXAMPLE-REPLACE-ME",
+  );
   await expect(page.getByText("fixture upstream deployment detail")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "用脚本把 Codex 接入 EggAi" })).toBeVisible();
 
@@ -140,7 +145,9 @@ test("an unavailable ecosystem response is contained and stripped of upstream de
   const panel = page.getByRole("region", { name: "Codex 配置" });
   await expect(panel.getByText("暂时无法检查 EggAi API Account")).toBeVisible();
   await expect(panel.getByRole("button", { name: "重试" })).toBeVisible();
-  await expect(panel.getByText("sk-EGGDOC-EXAMPLE-REPLACE-ME", { exact: true })).toBeVisible();
+  await expect(panel.getByTestId("shell-quick-command")).toContainText(
+    "sk-EGGDOC-EXAMPLE-REPLACE-ME",
+  );
   await expect(page.getByText("fixture upstream deployment detail")).toHaveCount(0);
 });
 
@@ -157,5 +164,7 @@ test("a server configuration failure has a distinct generic unavailable state", 
   const panel = page.getByRole("region", { name: "Codex 配置" });
   await expect(panel.getByText("EggAi 配置服务暂不可用")).toBeVisible();
   await expect(panel.getByRole("button", { name: "重试" })).toBeVisible();
-  await expect(panel.getByText("sk-EGGDOC-EXAMPLE-REPLACE-ME", { exact: true })).toBeVisible();
+  await expect(panel.getByTestId("shell-quick-command")).toContainText(
+    "sk-EGGDOC-EXAMPLE-REPLACE-ME",
+  );
 });

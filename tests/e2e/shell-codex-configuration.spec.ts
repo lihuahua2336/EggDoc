@@ -17,6 +17,20 @@ test.beforeEach(async ({ context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 });
 
+test("a Reader sees one primary Shell copy action before configuration details", async ({ page }) => {
+  await page.goto("/eggai/codex-installer/");
+
+  const panel = page.getByRole("region", { name: /^Codex / });
+  await expect(panel.getByRole("heading", { name: "一键配置" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "复制一键配置命令" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "复制 API Key" })).toBeHidden();
+  await expect(panel.getByRole("button", { name: "复制 Base URL" })).toBeHidden();
+  await expect(panel.getByRole("button", { name: "复制 config.toml" })).toBeHidden();
+
+  await panel.getByRole("button", { name: "复制一键配置命令" }).click();
+  await expect(readClipboard(page)).resolves.toContain("/install/codex.sh");
+});
+
 test("an authenticated Reader can copy each Shell configuration value explicitly", async ({
   page,
 }) => {
@@ -28,6 +42,7 @@ test("an authenticated Reader can copy each Shell configuration value explicitly
   await expect(
     panel.locator("pre").filter({ hasText: "sk-REDACTED-EXPLICIT-COPY-ONLY" }),
   ).toBeVisible();
+  await panel.getByText("配置详情", { exact: true }).click();
 
   await panel.getByRole("button", { name: "复制 API Key" }).click();
   await expect(readClipboard(page)).resolves.toBe(FIXTURE_KEY);
@@ -42,16 +57,16 @@ test("an authenticated Reader can copy each Shell configuration value explicitly
   expect(config).toContain("请默认使用简体中文回答");
   expect(config).not.toContain(FIXTURE_KEY);
 
-  await panel.getByRole("button", { name: "复制完整 Shell 命令" }).click();
+  await panel.getByRole("button", { name: "复制一键配置命令" }).click();
   await expect(readClipboard(page)).resolves.toBe(
     "curl -fsSL 'https://eggdoc.pages.dev/install/codex.sh' | sh -s -- " +
       `--sk-key '${FIXTURE_KEY}' --baseurl '${FIXTURE_BASE_URL}' --language 'zh-cn'`,
   );
-  await expect(panel.getByRole("button", { name: "完整 Shell 命令已复制" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "一键配置命令已复制" })).toBeVisible();
 
   await panel.getByLabel("Codex 默认语言").selectOption("en-us");
-  await expect(panel.getByRole("button", { name: "复制完整 Shell 命令" })).toBeVisible();
-  await panel.getByRole("button", { name: "复制完整 Shell 命令" }).click();
+  await expect(panel.getByRole("button", { name: "复制一键配置命令" })).toBeVisible();
+  await panel.getByRole("button", { name: "复制一键配置命令" }).click();
   await expect(readClipboard(page)).resolves.toContain("--language 'en-us'");
 });
 
@@ -61,6 +76,7 @@ test("an anonymous Reader can choose and remember English without storing genera
   await page.goto("/eggai/codex-installer/");
 
   const panel = page.getByRole("region", { name: /^Codex / });
+  await panel.getByText("配置详情", { exact: true }).click();
   await expect(
     panel.getByText("sk-EGGDOC-EXAMPLE-REPLACE-ME", { exact: true }),
   ).toBeVisible();
@@ -73,7 +89,7 @@ test("an anonymous Reader can choose and remember English without storing genera
   await panel.getByRole("button", { name: "复制 config.toml" }).click();
   expect(await readClipboard(page)).toContain("Respond in English by default");
 
-  await panel.getByRole("button", { name: "复制完整 Shell 命令" }).click();
+  await panel.getByRole("button", { name: "复制一键配置命令" }).click();
   const command = await readClipboard(page);
   expect(command).toContain("--language 'en-us'");
   expect(command).toContain("--sk-key 'sk-EGGDOC-EXAMPLE-REPLACE-ME'");
@@ -93,7 +109,7 @@ test("Shell configuration stays inside the panel on a narrow mobile viewport", a
   await page.setViewportSize({ height: 844, width: 390 });
   await page.goto("/eggai/codex-installer/");
 
-  const layout = await page.locator("#codex-config > div").evaluate((grid) => {
+  const layout = await page.locator("#codex-config details > div").evaluate((grid) => {
     const gridRect = grid.getBoundingClientRect();
     return Array.from(grid.children).map((child) => {
       const rect = child.getBoundingClientRect();

@@ -38,3 +38,9 @@ Turn the Selected API Credential into copyable generic values, a non-secret Code
 - Template tests cover API-key/URL apostrophe quoting, TOML escaping, language instructions, and redaction. Shell tests use `sh -n` and fake-key `--dry-run` only for defaults, validation, provider preview, backup/login plan, and key redaction. No real Codex installation, download, login, or production EggAi/Logto service was executed.
 - Verification: `npm test` passed 43 tests; `npm run check` reported 0 errors, warnings, or hints; `npm run build` completed successfully; production `dist` contained no personalized fixture keys or Base URLs.
 - `/code-review` Standards and Spec follow-up reviews reported no remaining or new findings. Task 06 was not started.
+
+### 2026-07-15 UX follow-up
+
+- Simplified the default panel to a Quick Start card with one visible Shell command and one primary copy action, matching the requested one-click workflow.
+- Moved credential selection, language, API Key/Base URL, `config.toml`, and PowerShell controls into a collapsed `配置详情` disclosure while keeping login, activation, retry, and reauthorization actions visible.
+- Desktop and 390px in-app browser checks confirmed the compact card, collapsed details, internal command scrolling, and no page overflow. Full verification passed 44 tests with 0 type-check diagnostics.

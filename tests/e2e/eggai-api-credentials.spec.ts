@@ -12,6 +12,7 @@ async function signInFromTutorial(page: Page) {
   await page.goto("/auth/login?returnTo=%2Feggai%2Fcodex-installer%2F%23codex-config");
   await page.getByRole("button", { name: "继续登录" }).click();
   await expect(page).toHaveURL(/\/eggai\/codex-installer\/#codex-config$/);
+  await page.getByText("配置详情", { exact: true }).click();
 }
 
 test.afterEach(async ({ request }) => {
@@ -50,7 +51,7 @@ test("a single EggAi API Credential is shown in plaintext with its read-only det
 }) => {
   await signInFromTutorial(page);
 
-  const panel = page.getByRole("region", { name: "Codex 配置" });
+  const panel = page.getByRole("region", { name: /^Codex / });
   await expect(panel.getByText(SINGLE_KEY, { exact: true })).toBeVisible();
   await expect(panel.getByText("Codex primary", { exact: true })).toBeVisible();
   await expect(panel.getByText("default", { exact: true })).toBeVisible();
@@ -74,7 +75,7 @@ test("a remembered credential identifier is restored and another credential can 
   );
   await signInFromTutorial(page);
 
-  const panel = page.getByRole("region", { name: "Codex 配置" });
+  const panel = page.getByRole("region", { name: /^Codex / });
   const selector = panel.getByLabel("EggAi API Credential");
   await expect(selector).toHaveValue("202");
   await expect(panel.getByText(SECONDARY_KEY, { exact: true })).toBeVisible();
@@ -111,7 +112,7 @@ test("a stale remembered credential identifier falls back to the first usable cr
   );
   await signInFromTutorial(page);
 
-  const panel = page.getByRole("region", { name: "Codex 配置" });
+  const panel = page.getByRole("region", { name: /^Codex / });
   await expect(panel.getByLabel("EggAi API Credential")).toHaveValue("101");
   await expect(panel.getByText(SINGLE_KEY, { exact: true })).toBeVisible();
   await expect
@@ -127,9 +128,9 @@ test("Session expiry removes personalized credentials and restores anonymous con
   await expect(page.getByText(SINGLE_KEY, { exact: true })).toBeVisible();
 
   await setEcosystemMode(request, "authorization-expired");
-  await page.getByRole("region", { name: "Codex 配置" }).getByRole("button", { name: "重新检查" }).click();
+  await page.getByRole("region", { name: /^Codex / }).getByRole("button", { name: "重新检查" }).click();
 
-  const panel = page.getByRole("region", { name: "Codex 匿名配置" });
+  const panel = page.getByRole("region", { name: /^Codex / });
   await expect(panel.getByText(SINGLE_KEY, { exact: true })).toHaveCount(0);
   await expect(panel.getByText("sk-EGGDOC-EXAMPLE-REPLACE-ME", { exact: true })).toBeVisible();
   await expect(panel.getByText("EggAi 授权已过期", { exact: true })).toBeVisible();
@@ -205,7 +206,7 @@ for (const malformedUpstream of [
     expect(response.headers()["cache-control"]).toBe("private, no-store");
     await expect(response.json()).resolves.toEqual({ state: "temporary-error" });
 
-    const panel = page.getByRole("region", { name: "Codex 配置" });
+    const panel = page.getByRole("region", { name: /^Codex / });
     await expect(panel.getByText("暂时无法检查 EggAi API Account")).toBeVisible();
     await expect(panel.getByText(malformedUpstream.partialKey, { exact: true })).toHaveCount(0);
     await expect(panel.getByText("sk-EGGDOC-EXAMPLE-REPLACE-ME", { exact: true })).toBeVisible();
