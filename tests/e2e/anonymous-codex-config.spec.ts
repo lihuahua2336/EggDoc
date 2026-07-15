@@ -8,14 +8,14 @@ test("an anonymous Reader can use safe public Codex configuration", async ({ con
   await expect(panel).toBeVisible();
   await expect(panel.getByText("sk-EGGDOC-EXAMPLE-REPLACE-ME", { exact: true })).toBeVisible();
   await expect(panel.getByText("这不是可用密钥", { exact: true })).toBeVisible();
-  await expect(panel.getByText("https://api.eggai.icu/v1", { exact: true })).toBeVisible();
-  await expect(panel.getByText("zh-cn", { exact: true })).toBeVisible();
+  await expect(panel.getByLabel("EggAi Base URL")).toHaveValue("https://api.eggai.icu/v1");
+  await expect(panel.getByLabel("Codex 默认语言")).toHaveValue("zh-cn");
 
-  await panel.getByRole("button", { name: "复制 Shell 示例" }).click();
+  await panel.getByRole("button", { name: "复制完整 Shell 命令" }).click();
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toBe(
-    'curl -fsSL https://eggdoc.pages.dev/install/codex.sh | sh -s -- --sk-key "sk-EGGDOC-EXAMPLE-REPLACE-ME" --baseurl "https://api.eggai.icu/v1" --language zh-cn',
+    "curl -fsSL 'https://eggdoc.pages.dev/install/codex.sh' | sh -s -- --sk-key 'sk-EGGDOC-EXAMPLE-REPLACE-ME' --baseurl 'https://api.eggai.icu/v1' --language 'zh-cn'",
   );
-  await expect(panel.getByRole("button", { name: "Shell 示例已复制" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "完整 Shell 命令已复制" })).toBeVisible();
 
   await panel.getByRole("button", { name: "复制 PowerShell 示例" }).click();
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toBe(
