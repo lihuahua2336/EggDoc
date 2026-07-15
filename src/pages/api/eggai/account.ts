@@ -1,11 +1,12 @@
 import type { APIRoute } from "astro";
 
+import { PUBLIC_EGGAI_BASE_URL } from "@/config/public";
 import { getCurrentAuthorization } from "@/lib/auth/authorization";
 import { getAuthConfig } from "@/lib/auth/config";
+import { clearSession } from "@/lib/auth/session";
 import type { EggAiApiAccountResponse } from "@/lib/eggai/account-response";
 import { getEcosystemUrl } from "@/lib/eggai/config";
-import { getEggAiApiAccount } from "@/lib/eggai/ecosystem";
-import { clearSession } from "@/lib/auth/session";
+import { getEggAiApiAccount, getEggAiApiConfiguration } from "@/lib/eggai/ecosystem";
 
 export const prerender = false;
 
@@ -43,6 +44,27 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
   if (account.kind === "temporary-error") {
     return json({ state: "temporary-error" }, 502);
+  }
+
+  if (account.kind === "active") {
+    const configuration = await getEggAiApiConfiguration(
+      ecosystemUrl,
+      current.authorization.accessToken,
+      PUBLIC_EGGAI_BASE_URL,
+    );
+    if (configuration.kind === "authorization-expired") {
+      clearSession(cookies, url);
+      return json({ state: "reauthorization-required" }, 401);
+    }
+    if (configuration.kind === "temporary-error") {
+      return json({ state: "temporary-error" }, 502);
+    }
+    return json({
+      activationUrl: config.eggAiPlatformUrl.href,
+      credentials: configuration.credentials,
+      modelSummary: configuration.modelSummary,
+      state: "active",
+    });
   }
 
   return json({

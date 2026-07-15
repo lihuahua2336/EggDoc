@@ -9,7 +9,7 @@ import {
   LogIn,
   RefreshCw,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useEggAiApiAccount } from "@/components/codex/useEggAiApiAccount";
@@ -20,10 +20,12 @@ import {
   PUBLIC_EGGAI_BASE_URL,
   SHELL_INSTALL_COMMAND,
 } from "@/config/public";
+import type { EggAiApiCredential, EggAiModelSummary } from "@/lib/eggai/account-response";
 
 type CopyStatus = "idle" | "copied" | "error";
 
 const tutorialReturnTo = "/eggai/codex-installer/#codex-config";
+const selectedCredentialStorageKey = "eggdoc:selected-api-credential-id";
 
 function loginHref(reauthorize = false) {
   return `/auth/login?returnTo=${encodeURIComponent(tutorialReturnTo)}${reauthorize ? "&reauthorize=1" : ""}`;
@@ -72,10 +74,122 @@ function CopyableCommand({ command, title }: { command: string; title: string })
   );
 }
 
+function CredentialDetails({
+  credential,
+  credentials,
+  modelSummary,
+  onCredentialChange,
+}: {
+  credential: EggAiApiCredential;
+  credentials: EggAiApiCredential[];
+  modelSummary: EggAiModelSummary;
+  onCredentialChange: (id: string) => void;
+}) {
+  return (
+    <>
+      {credentials.length > 1 && (
+        <div className="sm:col-span-2">
+          <label
+            className="text-xs font-medium text-muted-foreground"
+            htmlFor="eggai-api-credential"
+          >
+            EggAi API Credential
+          </label>
+          <select
+            className="mt-2 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+            id="eggai-api-credential"
+            onChange={(event) => onCredentialChange(event.target.value)}
+            value={credential.id}
+          >
+            {credentials.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name} · {option.group}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="sm:col-span-2">
+        <p className="text-xs font-medium text-muted-foreground">Selected API Credential</p>
+        <code className="mt-2 block overflow-x-auto rounded-md border border-border bg-background px-3 py-2 text-sm">
+          {credential.key}
+        </code>
+      </div>
+      <div>
+        <p className="text-xs font-medium text-muted-foreground">Token 名称</p>
+        <p className="mt-2 text-sm font-medium">{credential.name}</p>
+      </div>
+      <div>
+        <p className="text-xs font-medium text-muted-foreground">Token 组</p>
+        <p className="mt-2 text-sm font-medium">{credential.group}</p>
+      </div>
+      <div className="sm:col-span-2">
+        <label className="text-xs font-medium text-muted-foreground" htmlFor="eggai-base-url">
+          EggAi Base URL
+        </label>
+        <input
+          className="mt-2 h-10 w-full rounded-md border border-border bg-muted/30 px-3 font-mono text-sm text-foreground"
+          id="eggai-base-url"
+          readOnly
+          value={credential.baseUrl}
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <p className="text-xs font-medium text-muted-foreground">可用模型</p>
+        <p className="mt-2 text-sm font-medium">{modelSummary.availableCount} 个可用模型</p>
+        <p className="mt-1 break-words text-sm text-muted-foreground">
+          {modelSummary.names.join("、") || "当前未返回模型名称"}
+        </p>
+      </div>
+    </>
+  );
+}
+
 export function EggAiCodexConfig() {
   const { copyValue: copyBaseUrl, status: baseUrlCopyStatus } =
     useCopyValue(PUBLIC_EGGAI_BASE_URL);
   const { accountState, checkAccount, markActivationStarted } = useEggAiApiAccount();
+  const [selectedCredentialId, setSelectedCredentialId] = useState<string>();
+
+  useEffect(() => {
+    if (accountState.kind !== "active") return;
+    let rememberedId: string | null = null;
+    try {
+      rememberedId = window.localStorage.getItem(selectedCredentialStorageKey);
+    } catch {
+      // Selection remains usable when persistent browser storage is unavailable.
+    }
+    const nextId = accountState.credentials.some((credential) => credential.id === rememberedId)
+      ? rememberedId!
+      : accountState.credentials[0].id;
+    setSelectedCredentialId(nextId);
+    rememberSelectedCredential(nextId);
+  }, [accountState]);
+
+  useEffect(() => {
+    function handleSessionCleared() {
+      setSelectedCredentialId(undefined);
+      try {
+        window.localStorage.removeItem(selectedCredentialStorageKey);
+      } catch {
+        // The in-memory selection is still cleared.
+      }
+    }
+
+    window.addEventListener("eggdoc:session-cleared", handleSessionCleared);
+    return () => window.removeEventListener("eggdoc:session-cleared", handleSessionCleared);
+  }, []);
+
+  const selectedCredential =
+    accountState.kind === "active"
+      ? (accountState.credentials.find((credential) => credential.id === selectedCredentialId) ??
+        accountState.credentials[0])
+      : undefined;
+
+  function selectCredential(id: string) {
+    setSelectedCredentialId(id);
+    rememberSelectedCredential(id);
+  }
 
   let panelTitle = "Codex 配置";
   let accountAction;
@@ -150,6 +264,7 @@ export function EggAiCodexConfig() {
       </>
     );
   } else if (accountState.kind === "reauthorization-required") {
+    panelTitle = "Codex 匿名配置";
     accountAction = (
       <>
         <p className="mt-1 inline-flex items-center gap-2 text-sm font-medium">
@@ -202,37 +317,48 @@ export function EggAiCodexConfig() {
       </header>
 
       <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
-        <div className="sm:col-span-2">
-          <p className="text-xs font-medium text-muted-foreground">Configuration Placeholder</p>
-          <code className="mt-2 block overflow-x-auto rounded-md border border-border bg-background px-3 py-2 text-sm">
-            {CONFIGURATION_PLACEHOLDER}
-          </code>
-          <p className="mt-2 text-sm font-medium text-destructive">这不是可用密钥</p>
-        </div>
+        {selectedCredential && accountState.kind === "active" ? (
+          <CredentialDetails
+            credential={selectedCredential}
+            credentials={accountState.credentials}
+            modelSummary={accountState.modelSummary}
+            onCredentialChange={selectCredential}
+          />
+        ) : (
+          <div className="sm:col-span-2">
+            <p className="text-xs font-medium text-muted-foreground">Configuration Placeholder</p>
+            <code className="mt-2 block overflow-x-auto rounded-md border border-border bg-background px-3 py-2 text-sm">
+              {CONFIGURATION_PLACEHOLDER}
+            </code>
+            <p className="mt-2 text-sm font-medium text-destructive">这不是可用密钥</p>
+          </div>
+        )}
 
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">EggAi Base URL</p>
-          <code className="mt-2 block overflow-x-auto text-sm">{PUBLIC_EGGAI_BASE_URL}</code>
-          <Button
-            className="mt-3"
-            onClick={copyBaseUrl}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            {baseUrlCopyStatus === "copied" ? (
-              <Check aria-hidden="true" className="h-4 w-4" />
-            ) : (
-              <Copy aria-hidden="true" className="h-4 w-4" />
+        {!selectedCredential && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">EggAi Base URL</p>
+            <code className="mt-2 block overflow-x-auto text-sm">{PUBLIC_EGGAI_BASE_URL}</code>
+            <Button
+              className="mt-3"
+              onClick={copyBaseUrl}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {baseUrlCopyStatus === "copied" ? (
+                <Check aria-hidden="true" className="h-4 w-4" />
+              ) : (
+                <Copy aria-hidden="true" className="h-4 w-4" />
+              )}
+              {baseUrlCopyStatus === "copied" ? "Base URL 已复制" : "复制 Base URL"}
+            </Button>
+            {baseUrlCopyStatus === "error" && (
+              <p className="mt-2 text-sm text-destructive" role="status">
+                复制失败，请手动选择地址。
+              </p>
             )}
-            {baseUrlCopyStatus === "copied" ? "Base URL 已复制" : "复制 Base URL"}
-          </Button>
-          {baseUrlCopyStatus === "error" && (
-            <p className="mt-2 text-sm text-destructive" role="status">
-              复制失败，请手动选择地址。
-            </p>
-          )}
-        </div>
+          </div>
+        )}
         <div>
           <p className="text-xs font-medium text-muted-foreground">默认语言</p>
           <code className="mt-2 block text-sm">{DEFAULT_CODEX_LANGUAGE}</code>
@@ -243,4 +369,12 @@ export function EggAiCodexConfig() {
       </div>
     </section>
   );
+}
+
+function rememberSelectedCredential(id: string) {
+  try {
+    window.localStorage.setItem(selectedCredentialStorageKey, id);
+  } catch {
+    // Token IDs are a convenience preference; selection still works in memory.
+  }
 }

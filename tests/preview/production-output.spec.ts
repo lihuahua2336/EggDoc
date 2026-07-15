@@ -4,7 +4,13 @@ import path from "node:path";
 import { parse } from "yaml";
 
 const CONFIGURATION_PLACEHOLDER = "sk-EGGDOC-EXAMPLE-REPLACE-ME";
-const PERSONALIZED_FIXTURE_CREDENTIAL = "sk-PERSONALIZED-FIXTURE-MUST-NEVER-SHIP";
+const PERSONALIZED_FIXTURE_VALUES = [
+  "sk-PERSONALIZED-FIXTURE-MUST-NEVER-SHIP",
+  "sk-EGGDOC-SINGLE-FIXTURE-ONLY",
+  "sk-EGGDOC-SECONDARY-FIXTURE-ONLY",
+  "https://api.fixture.eggai.test/v1",
+  "https://edge.fixture.eggai.test/v1",
+];
 
 async function listFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -113,6 +119,10 @@ test("every published page is anonymous, prerendered, and included in the sitema
   const outputFiles = await listFiles("dist");
   for (const outputFile of outputFiles) {
     const contents = await readFile(outputFile);
-    expect(contents.includes(Buffer.from(PERSONALIZED_FIXTURE_CREDENTIAL))).toBe(false);
+    for (const fixtureValue of PERSONALIZED_FIXTURE_VALUES) {
+      expect(contents.includes(Buffer.from(fixtureValue)), `${outputFile} contains ${fixtureValue}`).toBe(
+        false,
+      );
+    }
   }
 });

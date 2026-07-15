@@ -11,6 +11,28 @@ const keyId = "eggdoc-test-key";
 const stats = { globalLogoutCount: 0, refreshGrantCount: 0 };
 const ecosystem = { accountRequestCount: 0, mode: "active" };
 
+const singleCredential = {
+  base_url: "https://api.fixture.eggai.test/v1",
+  group: "default",
+  id: 101,
+  key: "sk-EGGDOC-SINGLE-FIXTURE-ONLY",
+  name: "Codex primary",
+};
+
+const secondaryCredential = {
+  base_url: "https://edge.fixture.eggai.test/v1",
+  group: "coding",
+  id: 202,
+  key: "sk-EGGDOC-SECONDARY-FIXTURE-ONLY",
+  name: "Codex secondary",
+};
+
+const availableModels = [
+  { id: "gpt-5.2" },
+  { id: "claude-sonnet-4-5" },
+  { id: "gemini-3-pro" },
+];
+
 function redirect(response, location) {
   response.writeHead(302, { location });
   response.end();
@@ -117,6 +139,53 @@ const server = createServer((request, response) => {
         data: { id: 42, username: "fixture-new-api-account" },
       }),
     );
+    return;
+  }
+
+  if (url.pathname === "/api/ecosystem/models") {
+    if (!request.headers.authorization?.startsWith("Bearer fixture-access-token")) {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ success: false, message: "fixture bearer token rejected" }));
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    const body =
+      ecosystem.mode === "malformed-models"
+        ? { success: true, data: [{ id: 42 }, null] }
+        : ecosystem.mode === "malformed-model-envelope"
+          ? { data: availableModels }
+          : { success: true, data: availableModels };
+    response.end(JSON.stringify(body));
+    return;
+  }
+
+  if (url.pathname === "/api/ecosystem/tokens") {
+    if (!request.headers.authorization?.startsWith("Bearer fixture-access-token")) {
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ success: false, message: "fixture bearer token rejected" }));
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    const credentials =
+      ecosystem.mode === "multiple-credentials"
+        ? [singleCredential, secondaryCredential]
+        : [singleCredential];
+    const body =
+      ecosystem.mode === "malformed-tokens"
+        ? {
+            success: true,
+            data: [
+              {
+                id: 303,
+                key: "sk-EGGDOC-MALFORMED-FIXTURE-ONLY",
+                name: null,
+              },
+            ],
+          }
+        : ecosystem.mode === "malformed-token-envelope"
+          ? { data: credentials }
+          : { success: true, data: credentials };
+    response.end(JSON.stringify(body));
     return;
   }
 

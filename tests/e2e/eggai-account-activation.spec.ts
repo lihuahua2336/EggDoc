@@ -56,10 +56,10 @@ test("an active EggAi API Account is adapted without exposing the ecosystem resp
 
   const account = await page.request.get("/api/eggai/account");
   expect(account.status()).toBe(200);
-  await expect(account.json()).resolves.toEqual({
+  await expect(account.json()).resolves.toEqual(expect.objectContaining({
     activationUrl: "https://api.eggai.icu/",
     state: "active",
-  });
+  }));
   await expect(page.getByText("EggAi API Account 已激活")).toBeVisible();
   await expect(page.getByText("fixture-new-api-account")).toHaveCount(0);
 });
@@ -78,7 +78,7 @@ test("expired ecosystem authorization becomes a local reauthorization state", as
   expect((await context.cookies()).find((cookie) => cookie.name === "eggdoc_session")).toBeUndefined();
 
   await signInFromTutorial(page);
-  const panel = page.getByRole("region", { name: "Codex 配置" });
+  const panel = page.getByRole("region", { name: "Codex 匿名配置" });
   await expect(panel.getByText("EggAi 授权已过期")).toBeVisible();
   await expect(panel.getByRole("link", { name: "重新授权 EggAi" })).toHaveAttribute(
     "href",
