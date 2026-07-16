@@ -28,6 +28,27 @@ export function buildShellInstallCommand({
   );
 }
 
+export function buildPowerShellInstallCommand({
+  apiKey,
+  baseUrl,
+  installerOrigin,
+  language,
+}: {
+  apiKey: string;
+  baseUrl: string;
+  installerOrigin: string;
+  language: CodexLanguage;
+}) {
+  const scriptUrl = `${installerOrigin.replace(/\/$/, "")}/install/codex.ps1`;
+
+  return (
+    `$env:SK_KEY = ${quotePowerShellArgument(apiKey)}; ` +
+    `$env:BASE_URL = ${quotePowerShellArgument(baseUrl)}; ` +
+    `$env:LANGUAGE = ${quotePowerShellArgument(language)}; ` +
+    `irm ${quotePowerShellArgument(scriptUrl)} | iex`
+  );
+}
+
 export function buildCodexConfigToml({
   baseUrl,
   language,
@@ -51,6 +72,10 @@ export function buildCodexConfigToml({
 
 function quoteShellArgument(value: string) {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function quotePowerShellArgument(value: string) {
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function escapeTomlBasicString(value: string) {

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   buildCodexConfigToml,
+  buildPowerShellInstallCommand,
   buildShellInstallCommand,
 } from "../../src/lib/codex/configuration";
 
@@ -18,6 +19,22 @@ test("Shell configuration safely quotes the selected credential, URL, and langua
       "--sk-key 'sk-reader'\"'\"'s-$HOME' " +
       "--baseurl 'https://api.example.test/v1?group=reader'\"'\"'s' " +
       "--language 'en-us'",
+  );
+});
+
+test("PowerShell configuration safely quotes the selected credential, URL, language, and installer", () => {
+  expect(
+    buildPowerShellInstallCommand({
+      apiKey: "sk-reader's-$HOME; `exit`",
+      baseUrl: "https://api.example.test/v1?group=reader's&value=$HOME",
+      installerOrigin: "https://docs.example.test/root's",
+      language: "en-us",
+    }),
+  ).toBe(
+    "$env:SK_KEY = 'sk-reader''s-$HOME; `exit`'; " +
+      "$env:BASE_URL = 'https://api.example.test/v1?group=reader''s&value=$HOME'; " +
+      "$env:LANGUAGE = 'en-us'; " +
+      "irm 'https://docs.example.test/root''s/install/codex.ps1' | iex",
   );
 });
 

@@ -13,8 +13,18 @@ async function readClipboard(page: Page) {
   return page.evaluate(() => navigator.clipboard.readText());
 }
 
-test.beforeEach(async ({ context }) => {
+test.beforeEach(async ({ context, page }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      get: () => "Linux x86_64",
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      configurable: true,
+      get: () => ({ platform: "Linux" }),
+    });
+  });
 });
 
 test("a Reader sees one primary Shell copy action before configuration details", async ({ page }) => {

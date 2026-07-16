@@ -7,9 +7,3 @@ export const PUBLIC_INSTALLER_ORIGIN = (
 
 export const DEFAULT_CODEX_LANGUAGE = "zh-cn";
 export const CONFIGURATION_PLACEHOLDER = "sk-EGGDOC-EXAMPLE-REPLACE-ME";
-
-export const POWERSHELL_INSTALL_COMMAND =
-  `$env:SK_KEY = "${CONFIGURATION_PLACEHOLDER}"; ` +
-  `$env:BASE_URL = "${PUBLIC_EGGAI_BASE_URL}"; ` +
-  `$env:LANGUAGE = "${DEFAULT_CODEX_LANGUAGE}"; ` +
-  `irm ${PUBLIC_INSTALLER_ORIGIN}/install/codex.ps1 | iex`;

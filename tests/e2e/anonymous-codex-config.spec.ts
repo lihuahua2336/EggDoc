@@ -7,6 +7,7 @@ test("an anonymous Reader can use safe public Codex configuration", async ({ con
   const panel = page.getByRole("region", { name: /^Codex / });
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("heading", { name: "一键配置" })).toBeVisible();
+  await panel.getByRole("button", { name: "macOS / Linux" }).click();
   await panel.getByRole("button", { name: "复制一键配置命令" }).click();
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
     "/install/codex.sh",
@@ -22,11 +23,12 @@ test("an anonymous Reader can use safe public Codex configuration", async ({ con
   );
   await expect(panel.getByRole("button", { name: "一键配置命令已复制" })).toBeVisible();
 
-  await panel.getByRole("button", { name: "复制 PowerShell 示例" }).click();
+  await panel.getByRole("button", { name: "Windows" }).click();
+  await panel.getByRole("button", { name: "复制一键配置命令" }).click();
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toBe(
-    '$env:SK_KEY = "sk-EGGDOC-EXAMPLE-REPLACE-ME"; $env:BASE_URL = "https://api.eggai.icu/v1"; $env:LANGUAGE = "zh-cn"; irm https://eggdoc.pages.dev/install/codex.ps1 | iex',
+    "$env:SK_KEY = 'sk-EGGDOC-EXAMPLE-REPLACE-ME'; $env:BASE_URL = 'https://api.eggai.icu/v1'; $env:LANGUAGE = 'zh-cn'; irm 'https://eggdoc.pages.dev/install/codex.ps1' | iex",
   );
-  await expect(panel.getByRole("button", { name: "PowerShell 示例已复制" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "一键配置命令已复制" })).toBeVisible();
 
   await panel.getByRole("button", { name: "复制 Base URL" }).click();
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toBe(

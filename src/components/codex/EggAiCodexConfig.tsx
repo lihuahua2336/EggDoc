@@ -17,22 +17,32 @@ import { useEggAiApiAccount } from "@/components/codex/useEggAiApiAccount";
 import {
   CONFIGURATION_PLACEHOLDER,
   DEFAULT_CODEX_LANGUAGE,
-  POWERSHELL_INSTALL_COMMAND,
   PUBLIC_EGGAI_BASE_URL,
   PUBLIC_INSTALLER_ORIGIN,
 } from "@/config/public";
 import {
   buildCodexConfigToml,
+  buildPowerShellInstallCommand,
   buildShellInstallCommand,
   type CodexLanguage,
 } from "@/lib/codex/configuration";
 import type { EggAiApiCredential, EggAiModelSummary } from "@/lib/eggai/account-response";
 
 type CopyStatus = "idle" | "copied" | "error";
+type CodexPlatform = "unix" | "windows";
 
 const tutorialReturnTo = "/eggai/codex-installer/#codex-config";
 const selectedCredentialStorageKey = "eggdoc:selected-api-credential-id";
 const codexLanguageStorageKey = "eggdoc:codex-language";
+const codexPlatformStorageKey = "eggdoc:codex-platform";
+
+function detectBrowserPlatform(): CodexPlatform {
+  const browserNavigator = navigator as Navigator & {
+    userAgentData?: { platform?: string };
+  };
+  const platform = browserNavigator.userAgentData?.platform ?? browserNavigator.platform;
+  return /^win/i.test(platform) ? "windows" : "unix";
+}
 
 function loginHref(reauthorize = false) {
   return `/auth/login?returnTo=${encodeURIComponent(tutorialReturnTo)}${reauthorize ? "&reauthorize=1" : ""}`;
@@ -115,8 +125,8 @@ function QuickCopyCommand({
     <div className="mt-5 min-w-0 overflow-hidden rounded-md border border-white/15 bg-black/20">
       <div className="flex min-w-0 items-stretch">
         <pre
-          className="min-w-0 flex-1 overflow-x-auto bg-transparent px-4 py-3 text-xs leading-6 text-neutral-100 sm:text-sm"
-          data-testid="shell-quick-command"
+          className="min-w-0 flex-1 overflow-x-auto !rounded-none !border-0 !bg-transparent !px-4 !py-3 text-xs leading-6 text-neutral-100 sm:text-sm"
+          data-testid="codex-quick-command"
         >
           <code>{command}</code>
         </pre>
@@ -257,6 +267,20 @@ export function EggAiCodexConfig() {
   const { accountState, checkAccount, markActivationStarted } = useEggAiApiAccount();
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>();
   const [language, setLanguage] = useState<CodexLanguage>(DEFAULT_CODEX_LANGUAGE);
+  const [platform, setPlatform] = useState<CodexPlatform>("unix");
+
+  useEffect(() => {
+    try {
+      const rememberedPlatform = window.localStorage.getItem(codexPlatformStorageKey);
+      if (rememberedPlatform === "unix" || rememberedPlatform === "windows") {
+        setPlatform(rememberedPlatform);
+        return;
+      }
+    } catch {
+      // Browser detection remains available when persistent storage is unavailable.
+    }
+    setPlatform(detectBrowserPlatform());
+  }, []);
 
   useEffect(() => {
     try {
@@ -307,14 +331,23 @@ export function EggAiCodexConfig() {
   const configurationApiKey = selectedCredential?.key ?? CONFIGURATION_PLACEHOLDER;
   const configurationBaseUrl = selectedCredential?.baseUrl ?? PUBLIC_EGGAI_BASE_URL;
   const codexConfigToml = buildCodexConfigToml({ baseUrl: configurationBaseUrl, language });
-  const shellCommandPreview = buildShellInstallCommand({
-    apiKey: selectedCredential
-      ? "sk-REDACTED-EXPLICIT-COPY-ONLY"
-      : CONFIGURATION_PLACEHOLDER,
-    baseUrl: configurationBaseUrl,
-    installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-    language,
-  });
+  const buildInstallCommand = (apiKey: string) =>
+    platform === "windows"
+      ? buildPowerShellInstallCommand({
+          apiKey,
+          baseUrl: configurationBaseUrl,
+          installerOrigin: PUBLIC_INSTALLER_ORIGIN,
+          language,
+        })
+      : buildShellInstallCommand({
+          apiKey,
+          baseUrl: configurationBaseUrl,
+          installerOrigin: PUBLIC_INSTALLER_ORIGIN,
+          language,
+        });
+  const installCommandPreview = buildInstallCommand(
+    selectedCredential ? "sk-REDACTED-EXPLICIT-COPY-ONLY" : CONFIGURATION_PLACEHOLDER,
+  );
 
   function selectCredential(id: string) {
     setSelectedCredentialId(id);
@@ -327,6 +360,15 @@ export function EggAiCodexConfig() {
       window.localStorage.setItem(codexLanguageStorageKey, nextLanguage);
     } catch {
       // Language selection remains usable in memory.
+    }
+  }
+
+  function selectPlatform(nextPlatform: CodexPlatform) {
+    setPlatform(nextPlatform);
+    try {
+      window.localStorage.setItem(codexPlatformStorageKey, nextPlatform);
+    } catch {
+      // Platform selection remains usable in memory.
     }
   }
 
@@ -455,26 +497,49 @@ export function EggAiCodexConfig() {
         <h2 className="mt-3 text-xl font-semibold sm:text-2xl">一键配置</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-300">
           {selectedCredential
-            ? "已填入当前 EggAi API Credential。复制命令后，粘贴到 macOS 或 Linux 终端运行即可。"
-            : "复制命令后，将示例 API Key 替换为你的 EggAi API Key，再粘贴到 macOS 或 Linux 终端运行。"}
+            ? `已填入当前 EggAi API Credential。复制命令后，粘贴到${platform === "windows" ? " Windows PowerShell" : " macOS 或 Linux 终端"}运行即可。`
+            : `复制命令后，将示例 API Key 替换为你的 EggAi API Key，再粘贴到${platform === "windows" ? " Windows PowerShell" : " macOS 或 Linux 终端"}运行。`}
         </p>
 
+        <div
+          aria-label="操作系统"
+          className="mt-4 inline-flex max-w-full rounded-md border border-white/15 bg-white/5 p-1"
+          role="group"
+        >
+          <Button
+            aria-pressed={platform === "windows"}
+            className={platform === "windows" ? "bg-white/15 text-white" : "text-neutral-300"}
+            onClick={() => selectPlatform("windows")}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Windows
+          </Button>
+          <Button
+            aria-pressed={platform === "unix"}
+            className={platform === "unix" ? "bg-white/15 text-white" : "text-neutral-300"}
+            onClick={() => selectPlatform("unix")}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            macOS / Linux
+          </Button>
+        </div>
+
         <QuickCopyCommand
-          command={shellCommandPreview}
-          getCopyValue={() =>
-            buildShellInstallCommand({
-              apiKey: configurationApiKey,
-              baseUrl: configurationBaseUrl,
-              installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-              language,
-            })
-          }
-          statusResetKey={`${configurationApiKey}\u0000${configurationBaseUrl}\u0000${language}`}
+          command={installCommandPreview}
+          getCopyValue={() => buildInstallCommand(configurationApiKey)}
+          statusResetKey={`${platform}\u0000${configurationApiKey}\u0000${configurationBaseUrl}\u0000${language}`}
         />
 
         <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-neutral-400">
           <CircleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
-          <span>复制后的完整命令可能包含 API Key，请留意剪贴板和 shell history 风险。</span>
+          <span>
+            复制后的完整命令可能包含 API Key，请留意剪贴板和
+            {platform === "windows" ? " PowerShell history" : " shell history"} 风险。
+          </span>
         </p>
       </div>
 
@@ -534,7 +599,6 @@ export function EggAiCodexConfig() {
           </div>
 
           <CopyableCommand command={codexConfigToml} title="config.toml" />
-          <CopyableCommand command={POWERSHELL_INSTALL_COMMAND} title="PowerShell 示例" />
         </div>
       </details>
     </section>
