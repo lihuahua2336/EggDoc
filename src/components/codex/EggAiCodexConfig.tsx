@@ -479,6 +479,7 @@ export function EggAiCodexConfig() {
   return (
     <section
       id="codex-config"
+      data-code-copy-ignore
       aria-label={
         accountState.kind === "anonymous" || accountState.kind === "reauthorization-required"
           ? "Codex 匿名配置"

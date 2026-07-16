@@ -34,7 +34,12 @@ const lessons = defineCollection({
     type: z.literal("lesson"),
     path: z.string(),
     order: z.number(),
-    videoUrl: z.url().optional(),
+    videoUrl: z
+      .url()
+      .refine((url) => ["http:", "https:"].includes(new URL(url).protocol), {
+        message: "videoUrl must use http or https",
+      })
+      .optional(),
   }),
 });
 

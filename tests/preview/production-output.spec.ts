@@ -4,6 +4,7 @@ import path from "node:path";
 import { parse } from "yaml";
 
 const CONFIGURATION_PLACEHOLDER = "sk-EGGDOC-EXAMPLE-REPLACE-ME";
+const TEST_ONLY_ROUTE = "/learn/article-interactions-fixture/";
 const PERSONALIZED_FIXTURE_VALUES = [
   "sk-PERSONALIZED-FIXTURE-MUST-NEVER-SHIP",
   "sk-EGGDOC-SINGLE-FIXTURE-ONLY",
@@ -94,6 +95,7 @@ test("every published page is anonymous, prerendered, and included in the sitema
     file.endsWith(".html"),
   );
   const builtRoutes = builtHtmlFiles.map(routeFromBuiltHtml).sort();
+  expect(builtRoutes).not.toContain(TEST_ONLY_ROUTE);
   expect(builtRoutes).toEqual(expectedRoutes);
 
   const responses = await Promise.all(expectedRoutes.map((route) => request.get(route)));
@@ -106,6 +108,8 @@ test("every published page is anonymous, prerendered, and included in the sitema
     const document = new DOMParser().parseFromString(xml, "application/xml");
     return [...document.querySelectorAll("loc")].map((node) => node.textContent);
   }, await sitemapResponse.text());
+  const testOnlyUrl = new URL(TEST_ONLY_ROUTE, "https://eggdoc.pages.dev").href;
+  expect(sitemapUrls).not.toContain(testOnlyUrl);
   expect(sitemapUrls.sort()).toEqual(
     expectedRoutes.map((route) => new URL(route, "https://eggdoc.pages.dev").href).sort(),
   );

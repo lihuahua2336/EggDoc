@@ -6,13 +6,13 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
-    "build:test": "cross-env CLOUDFLARE_ENV=test astro check && cross-env CLOUDFLARE_ENV=test astro build && pagefind --site dist/client",
+    "build:test": "cross-env CLOUDFLARE_ENV=test astro check && cross-env CLOUDFLARE_ENV=test astro build --mode test && pagefind --site dist/client",
     "preview": "astro preview",
     "check": "astro check",
-    "test": "npm run build:test && playwright test",
+    "test": "npm run build:test && playwright test tests/e2e tests/install tests/unit && npm run test:preview",
     "test:e2e": "npm run build:test && playwright test tests/e2e",
     "test:preview": "npm run build && playwright test tests/preview",
-    "postbuild": "pagefind --site dist/client",
+    "postbuild": "pagefind --site dist/client && node tests/fixtures/assert-production-content.mjs",
     "deploy:cloudflare": "npm run build && wrangler deploy"
   },
   "dependencies": {

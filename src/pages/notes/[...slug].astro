@@ -1,5 +1,6 @@
 ---
 import { getCollection, render } from "astro:content";
+import { articleMdxComponents } from "@/components/article/mdx-components";
 import ArticleLayout from "@/layouts/ArticleLayout.astro";
 import { getNoteUrl, getRelatedEntries, isPublished } from "@/lib/content";
 
@@ -18,5 +19,5 @@ const related = await getRelatedEntries(entry);
 ---
 
 <ArticleLayout entry={entry} headings={headings} related={related}>
-  <Content />
+  <Content components={articleMdxComponents} />
 </ArticleLayout>

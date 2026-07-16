@@ -1,6 +1,7 @@
 ---
 import { Badge } from "@/components/ui/badge";
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import { ExternalLink, Video } from "lucide-react";
 import {
   formatDate,
   getEntryKindLabel,
@@ -25,6 +26,7 @@ interface Props {
 const { entry, headings = [], adjacent = {}, related = [] } = Astro.props;
 const toc = headings.filter((heading) => heading.depth >= 2 && heading.depth <= 3);
 const canonicalPath = getEntryUrl(entry);
+const videoUrl = entry.collection === "lessons" ? entry.data.videoUrl : undefined;
 ---
 
 <BaseLayout
@@ -59,9 +61,39 @@ const canonicalPath = getEntryUrl(entry);
           <span>更新于 {formatDate(entry.data.updatedAt)}</span>
         </div>
       </header>
+      {
+        videoUrl && (
+          <section
+            class="mb-8 flex min-w-0 gap-3 border-y border-border py-4"
+            aria-labelledby="lesson-video-heading"
+          >
+            <Video className="mt-0.5 shrink-0 text-primary" aria-hidden="true" size={20} />
+            <div class="min-w-0">
+              <h2 id="lesson-video-heading" class="text-sm font-semibold text-foreground">
+                课程视频
+              </h2>
+              <a
+                class="mt-1 inline-flex max-w-full items-start gap-1.5 text-sm leading-6 text-primary underline underline-offset-4"
+                href={videoUrl}
+                target="_blank"
+                rel="noopener noreferrer external"
+                aria-label="打开课程视频"
+              >
+                <span class="break-all">{videoUrl}</span>
+                <ExternalLink
+                  className="mt-1 shrink-0"
+                  aria-hidden="true"
+                  size={14}
+                />
+              </a>
+            </div>
+          </section>
+        )
+      }
       <div class="prose max-w-none">
         <slot />
       </div>
+      <p class="sr-only" aria-live="polite" data-code-copy-status></p>
       {
         (adjacent.previous || adjacent.next) && (
           <nav class="mt-12 grid gap-4 border-t border-border pt-8 md:grid-cols-2" aria-label="课程导航">
@@ -147,3 +179,52 @@ const canonicalPath = getEntryUrl(entry);
     </aside>
   </main>
 </BaseLayout>
+
+<script>
+  const resetTimers = new WeakMap<HTMLButtonElement, number>();
+
+  function announceCopyResult(button: HTMLButtonElement, label: string, message: string) {
+    const status = document.querySelector<HTMLElement>("[data-code-copy-status]");
+    button.textContent = label;
+    status?.replaceChildren(message);
+
+    const previousTimer = resetTimers.get(button);
+    if (previousTimer) window.clearTimeout(previousTimer);
+    resetTimers.set(
+      button,
+      window.setTimeout(() => {
+        button.textContent = "复制代码";
+      }, 2_000),
+    );
+  }
+
+  function enhanceCodeBlocks() {
+    document.querySelectorAll<HTMLElement>(".prose pre").forEach((codeBlock) => {
+      if (codeBlock.dataset.copyEnhanced === "true") return;
+      if (codeBlock.closest("[data-code-copy-ignore]")) return;
+
+      const code = codeBlock.querySelector<HTMLElement>("code");
+      if (!code) return;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "code-copy-button";
+      button.textContent = "复制代码";
+      button.addEventListener("click", async () => {
+        try {
+          if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+          await navigator.clipboard.writeText(code.textContent ?? "");
+          announceCopyResult(button, "代码已复制", "代码已复制到剪贴板。");
+        } catch {
+          announceCopyResult(button, "复制失败", "复制代码失败，请手动选择代码。");
+        }
+      });
+
+      codeBlock.dataset.copyEnhanced = "true";
+      codeBlock.append(button);
+    });
+  }
+
+  enhanceCodeBlocks();
+  document.addEventListener("astro:page-load", enhanceCodeBlocks);
+</script>
