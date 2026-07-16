@@ -17,6 +17,11 @@ type AuthState =
   | { kind: "unavailable" }
   | { eggAiPlatformUrl: string; identity: Identity; kind: "authenticated" };
 
+type AuthStatusProps = {
+  layout?: "drawer" | "header";
+  onAction?: () => void;
+};
+
 const authMessages = {
   cancelled: "登录已取消，当前页面仍可公开阅读。",
   failed: "登录未完成，请重试。当前页面仍可公开阅读。",
@@ -33,7 +38,7 @@ function getLoginHref(returnTo: string, reauthorize = false) {
   return `/auth/login?returnTo=${encodeURIComponent(returnTo)}${reauthorize ? "&reauthorize=1" : ""}`;
 }
 
-export function AuthStatus() {
+export function AuthStatus({ layout = "header", onAction }: AuthStatusProps) {
   const [state, setState] = useState<AuthState>({ kind: "loading" });
   const [returnTo, setReturnTo] = useState("/");
   const [message, setMessage] = useState<string>();
@@ -74,6 +79,12 @@ export function AuthStatus() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const clearIdentity = () => setState({ kind: "anonymous" });
+    window.addEventListener("eggdoc:session-cleared", clearIdentity);
+    return () => window.removeEventListener("eggdoc:session-cleared", clearIdentity);
+  }, []);
+
   async function logout() {
     const response = await fetch("/auth/logout", {
       credentials: "same-origin",
@@ -81,11 +92,40 @@ export function AuthStatus() {
     });
     if (!response.ok) return;
     window.dispatchEvent(new CustomEvent("eggdoc:session-cleared"));
-    setState({ kind: "anonymous" });
+    onAction?.();
   }
 
   let action;
-  if (state.kind === "authenticated") {
+  if (layout === "drawer" && state.kind === "authenticated") {
+    action = (
+      <div className="min-w-0 space-y-3" aria-label="EggAi 当前身份">
+        <div className="flex min-w-0 items-center gap-3 px-3">
+          <UserRound aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{state.identity.name}</p>
+            {state.identity.email && (
+              <p className="truncate text-xs text-muted-foreground">{state.identity.email}</p>
+            )}
+          </div>
+        </div>
+        <Button asChild className="w-full justify-start" variant="ghost">
+          <a
+            href={state.eggAiPlatformUrl}
+            onClick={onAction}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <ExternalLink aria-hidden="true" className="h-4 w-4" />
+            打开 EggAi API 平台
+          </a>
+        </Button>
+        <Button className="w-full justify-start" onClick={logout} type="button" variant="ghost">
+          <LogOut aria-hidden="true" className="h-4 w-4" />
+          退出 EggDoc
+        </Button>
+      </div>
+    );
+  } else if (state.kind === "authenticated") {
     action = (
       <div className="flex items-center gap-1" aria-label="EggAi 当前身份">
         <span className="hidden max-w-28 truncate text-sm font-medium lg:inline">
@@ -124,6 +164,16 @@ export function AuthStatus() {
         </Button>
       </div>
     );
+  } else if (layout === "drawer" && state.kind === "loading") {
+    action = (
+      <span
+        aria-label="正在读取 EggAi 身份"
+        className="flex h-10 items-center gap-2 px-3 text-sm text-muted-foreground"
+      >
+        <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
+        正在读取 EggAi 身份
+      </span>
+    );
   } else if (state.kind === "loading") {
     action = (
       <span
@@ -132,6 +182,15 @@ export function AuthStatus() {
       >
         <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
       </span>
+    );
+  } else if (layout === "drawer" && state.kind === "reauthorization-required") {
+    action = (
+      <Button asChild className="w-full justify-start" variant="outline">
+        <a href={getLoginHref(returnTo, true)} onClick={onAction}>
+          <RefreshCw aria-hidden="true" className="h-4 w-4" />
+          重新授权 EggAi
+        </a>
+      </Button>
     );
   } else if (state.kind === "reauthorization-required") {
     action = (
@@ -142,8 +201,19 @@ export function AuthStatus() {
         </a>
       </Button>
     );
+  } else if (layout === "drawer" && state.kind === "unavailable") {
+    action = <span className="block px-3 text-sm text-muted-foreground">登录暂不可用</span>;
   } else if (state.kind === "unavailable") {
     action = <span className="hidden text-sm text-muted-foreground lg:inline">登录暂不可用</span>;
+  } else if (layout === "drawer") {
+    action = (
+      <Button asChild className="w-full justify-start" variant="outline">
+        <a aria-label="登录 EggAi" href={getLoginHref(returnTo)} onClick={onAction}>
+          <LogIn aria-hidden="true" className="h-4 w-4" />
+          登录 EggAi
+        </a>
+      </Button>
+    );
   } else {
     action = (
       <Button asChild size="sm" variant="outline">
