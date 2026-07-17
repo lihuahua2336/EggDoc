@@ -1,33 +1,21 @@
 ---
 type: guide
 title: Claude Code 安装
-description: 复制一条命令安装或更新 Claude Code，并确认命令已经可用。
+description: 复制一条命令安装 Claude Code；需要时可切换到 EggAi 配置，一次完成安装与 API 接入。
 publishedAt: 2026-07-17
 updatedAt: 2026-07-17
-tags: [install, claude-code]
+tags: [install, claude-code, eggai]
 draft: false
 order: 30
 ---
 
-## macOS、Linux 或 WSL
+import { EggAiClaudeCodeConfig } from "@/components/claude-code/EggAiClaudeCodeConfig";
 
-在终端运行：
+## 安装
 
-```sh
-curl -fsSL 'https://eggdoc.pages.dev/install/claude-code.sh' | sh
-```
+选择你的安装方式和操作系统，复制命令后粘贴到终端运行。
 
-WSL 用户需要在 WSL 终端中运行这条命令。
-
-## Windows
-
-在 PowerShell 运行：
-
-```powershell
-irm 'https://eggdoc.pages.dev/install/claude-code.ps1' | iex
-```
-
-无需以管理员身份运行 PowerShell。
+<EggAiClaudeCodeConfig client:load />
 
 ## 验证安装
 
@@ -39,6 +27,6 @@ claude --version
 
 看到版本号即表示安装完成。
 
-脚本调用 Anthropic 推荐的原生安装器，不修改 Claude Code 配置，也不会自动完成账号登录。原生安装会由 Claude Code 在后台检查更新。
+默认模式调用 Anthropic 推荐的原生安装器，不修改 Claude Code 配置。选择 EggAi 配置后，脚本会保留原有设置并写入 EggAi 网关配置。
 
 [查看 Anthropic 官方安装文档](https://code.claude.com/docs/en/setup#install-claude-code)

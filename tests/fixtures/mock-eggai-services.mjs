@@ -143,6 +143,8 @@ const server = createServer((request, response) => {
     const body =
       ecosystem.mode === "malformed-models"
         ? { success: true, data: [{ id: 42 }, null] }
+        : ecosystem.mode === "no-claude-models"
+          ? { success: true, data: ["gpt-5.2", "gemini-3-pro"] }
         : ecosystem.mode === "malformed-model-envelope"
           ? { data: availableModels }
           : { success: true, data: availableModels };

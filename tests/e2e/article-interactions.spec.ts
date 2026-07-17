@@ -3,22 +3,24 @@ import { expect, test } from "@playwright/test";
 const articleWidths = [320, 1280] as const;
 
 for (const width of articleWidths) {
-  test(`a Reader can copy an install command code block at ${width}px`, async ({
+  test(`a Reader can copy a Claude Code install command at ${width}px`, async ({
     context,
     page,
   }) => {
     await page.setViewportSize({ height: 800, width });
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto("/eggai/claude-code-install/");
+    await page
+      .locator('astro-island[component-export="EggAiClaudeCodeConfig"]:not([ssr])')
+      .waitFor();
 
-    const firstCodeBlock = page.locator(".prose pre").first();
-    const copyButton = firstCodeBlock.locator("button.code-copy-button");
-    await expect(copyButton).toHaveAccessibleName("复制代码");
+    const panel = page.getByRole("region", { name: "Claude Code 安装" });
+    const copyButton = panel.getByRole("button", { name: "复制安装命令" });
     await copyButton.click();
 
-    await expect(copyButton).toHaveAccessibleName("代码已复制");
+    await expect(panel.getByRole("button", { name: "安装命令已复制" })).toBeVisible();
     await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
-      "eggdoc.pages.dev/install/claude-code.sh",
+      "eggdoc.pages.dev/install/claude-code.",
     );
   });
 
@@ -26,20 +28,21 @@ for (const width of articleWidths) {
     page,
   }) => {
     await page.setViewportSize({ height: 800, width });
-    await page.addInitScript(() => {
+    await page.goto("/eggai/claude-code-install/");
+    await page
+      .locator('astro-island[component-export="EggAiClaudeCodeConfig"]:not([ssr])')
+      .waitFor();
+    await page.evaluate(() => {
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
         value: { writeText: async () => Promise.reject(new Error("Simulated failure")) },
       });
     });
-    await page.goto("/eggai/claude-code-install/");
 
-    const copyButton = page.locator(".prose pre").first().locator("button.code-copy-button");
+    const panel = page.getByRole("region", { name: "Claude Code 安装" });
+    const copyButton = panel.getByRole("button", { name: "复制安装命令" });
     await copyButton.click();
-    await expect(copyButton).toHaveAccessibleName("复制失败");
-    await expect(page.locator("[data-code-copy-status]")).toHaveText(
-      "复制代码失败，请手动选择代码。",
-    );
+    await expect(panel.getByRole("status")).toHaveText("复制失败，请手动选择命令。");
   });
 
   test(`the tool tutorials fit ${width}px text layouts`, async ({ page }) => {
