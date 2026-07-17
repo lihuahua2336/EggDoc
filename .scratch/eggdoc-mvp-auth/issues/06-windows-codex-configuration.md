@@ -1,6 +1,8 @@
 # Generate the Windows Codex Integration Configuration
 
 Status: ready-for-agent
+Execution: completed
+Closed: 2026-07-17
 
 User stories: 28-31, 33, 36, 41
 

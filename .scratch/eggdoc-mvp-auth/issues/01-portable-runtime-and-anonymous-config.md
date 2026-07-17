@@ -1,6 +1,8 @@
 # Establish the portable runtime and anonymous Codex configuration
 
 Status: ready-for-agent
+Execution: completed
+Closed: 2026-07-17
 
 User stories: 1-6, 45-47, 62, 65-66
 

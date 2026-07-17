@@ -18,6 +18,8 @@ npm run preview
 - `npm run preview` previews the generated static site locally.
 - `npm run deploy:cloudflare` builds the site and deploys `dist/` with Wrangler.
 
+For the real localhost EggAi acceptance flow, use the environment and Logto setup in [Localhost real EggAi acceptance](docs/tutorials/localhost-real-eggai-acceptance.md). Keep all real values in the ignored `.env.local` file.
+
 ## Content
 
 Content lives in `src/content` and is validated by `src/content.config.ts`.

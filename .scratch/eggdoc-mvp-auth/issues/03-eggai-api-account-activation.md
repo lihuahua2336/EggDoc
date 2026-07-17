@@ -1,6 +1,8 @@
 # Add the EggAi API Account activation flow
 
 Status: ready-for-agent
+Execution: completed
+Closed: 2026-07-17
 
 User stories: 22-25, 49-51
 

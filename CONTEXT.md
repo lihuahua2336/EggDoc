@@ -5,8 +5,36 @@ EggDoc is a consumer-facing documentation site for practical AI product tutorial
 ## Language
 
 **Reader**:
-A non-enterprise consumer who wants help understanding or using AI products and AI-assisted programming workflows.
+A non-enterprise consumer who wants help understanding or using AI products and AI-assisted programming workflows. A Reader may browse anonymously or sign in with an EggAi Account without changing access to published content.
 _Avoid_: Developer, customer, enterprise user
+
+**EggAi Account**:
+An identity registered and authenticated by EggAi through Logto. EggDoc relies on this identity and does not create or manage a separate account or password.
+_Avoid_: EggDoc account, local account, site account
+
+**EggAi API Account**:
+An account activated on the EggAi API platform for an EggAi Account. Activation always creates at least one EggAi API Credential, and the account is distinct from merely having an authenticated EggAi identity.
+_Avoid_: New API registration, API login, EggDoc account
+
+**EggDoc Session**:
+An authenticated EggDoc browser session established from an EggAi Account. It unlocks personalized configuration retrieval but never controls access to published content.
+_Avoid_: Content subscription, member access, EggDoc account
+
+**EggAi API Credential**:
+A Reader's API token and Base URL retrieved on demand from the EggAi API platform after authentication. EggDoc may present it for copying but does not own or persist it.
+_Avoid_: EggDoc key, site credential, public API key
+
+**Selected API Credential**:
+The EggAi API Credential currently chosen by a Reader for generating copyable integration configuration. EggDoc may remember its token identifier in the browser but never the raw API token.
+_Avoid_: Default key, saved key, EggDoc key
+
+**Integration Configuration**:
+A copyable, application-specific configuration generated from the Selected API Credential. Each supported application has a verified template tied to its Integration Tutorial.
+_Avoid_: Generic setup text, unverified template, stored configuration
+
+**Configuration Placeholder**:
+A visibly non-secret example value shown inside public tutorial configuration when no EggDoc Session is available. It teaches the configuration shape but must never appear to be a usable credential.
+_Avoid_: Demo credential, fallback key, public API key
 
 **Tutorial**:
 A practical article that helps the reader complete a concrete task with an AI product or AI programming workflow.

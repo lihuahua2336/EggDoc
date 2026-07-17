@@ -2,6 +2,7 @@
 
 Status: ready-for-human
 Execution: completed
+Closed: 2026-07-17
 
 User stories: 69
 

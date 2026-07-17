@@ -1,6 +1,8 @@
 # Add EggAi login and the EggDoc Session
 
 Status: ready-for-agent
+Execution: completed
+Closed: 2026-07-17
 
 User stories: 7-13, 48, 50, 52-54, 63, 67
 

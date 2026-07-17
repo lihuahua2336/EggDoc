@@ -1,0 +1,3 @@
+# Encrypted cookie sessions without a database
+
+EggDoc stores the minimal authenticated session, including the EggAi resource and refresh tokens needed for configuration retrieval, in an encrypted HttpOnly cookie rather than a server-side session database. This keeps the MVP portable between Cloudflare and a future Node-based VPS deployment, at the cost of coarse revocation and strict cookie-size limits; the implementation uses portable Web Crypto, a seven-day maximum lifetime, secure cookie attributes, and logout-by-cookie-removal. Logging out ends only the EggDoc Session and does not terminate the Reader's shared EggAi/Logto session in other applications.

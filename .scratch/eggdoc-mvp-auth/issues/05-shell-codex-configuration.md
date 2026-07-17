@@ -1,6 +1,8 @@
 # Generate the Shell Codex Integration Configuration
 
 Status: ready-for-agent
+Execution: completed
+Closed: 2026-07-17
 
 User stories: 26-27, 32-35, 37-40, 42-43
 

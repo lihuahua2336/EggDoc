@@ -1,6 +1,8 @@
 # Display and select EggAi API Credentials
 
 Status: ready-for-agent
+Execution: completed
+Closed: 2026-07-17
 
 User stories: 14-21, 44-47, 64
 
