@@ -27,7 +27,15 @@ const secondaryCredential = {
   token_name: "Codex secondary",
 };
 
-const availableModels = ["gpt-5.2", "claude-sonnet-4-5", "gemini-3-pro"];
+const availableModels = [
+  "gpt-5.2",
+  "claude-sonnet-5",
+  "claude-fable-5",
+  "claude-opus-4-8",
+  "claude-opus-4-6",
+  "claude-sonnet-4-6",
+  "gemini-3-pro",
+];
 
 function redirect(response, location) {
   response.writeHead(302, { location });

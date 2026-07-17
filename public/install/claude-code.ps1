@@ -5,6 +5,10 @@ param(
   [Alias("SkKey")]
   [string]$Sk_Key,
   [string]$Model,
+  [string]$OpusModel,
+  [string]$SonnetModel,
+  [string]$HaikuModel,
+  [string]$FableModel,
   [switch]$EggAi,
   [switch]$DryRun
 )
@@ -23,6 +27,18 @@ if ([string]::IsNullOrWhiteSpace($Sk_Key)) {
 }
 if ([string]::IsNullOrWhiteSpace($Model)) {
   $Model = if ($env:MODEL) { $env:MODEL } else { $env:ANTHROPIC_MODEL }
+}
+if ([string]::IsNullOrWhiteSpace($OpusModel)) {
+  $OpusModel = if ($env:OPUS_MODEL) { $env:OPUS_MODEL } elseif ($env:ANTHROPIC_DEFAULT_OPUS_MODEL) { $env:ANTHROPIC_DEFAULT_OPUS_MODEL } else { $Model }
+}
+if ([string]::IsNullOrWhiteSpace($SonnetModel)) {
+  $SonnetModel = if ($env:SONNET_MODEL) { $env:SONNET_MODEL } elseif ($env:ANTHROPIC_DEFAULT_SONNET_MODEL) { $env:ANTHROPIC_DEFAULT_SONNET_MODEL } else { $Model }
+}
+if ([string]::IsNullOrWhiteSpace($HaikuModel)) {
+  $HaikuModel = if ($env:HAIKU_MODEL) { $env:HAIKU_MODEL } elseif ($env:ANTHROPIC_DEFAULT_HAIKU_MODEL) { $env:ANTHROPIC_DEFAULT_HAIKU_MODEL } else { $Model }
+}
+if ([string]::IsNullOrWhiteSpace($FableModel)) {
+  $FableModel = if ($env:FABLE_MODEL) { $env:FABLE_MODEL } elseif ($env:ANTHROPIC_DEFAULT_FABLE_MODEL) { $env:ANTHROPIC_DEFAULT_FABLE_MODEL } else { $Model }
 }
 $EggAiMode = $EggAi.IsPresent
 
@@ -64,7 +80,11 @@ function Update-ClaudeSettings {
     [string]$SettingsFile,
     [string]$ProviderBaseUrl,
     [string]$AuthToken,
-    [string]$ClaudeModel
+    [string]$ClaudeModel,
+    [string]$ClaudeOpusModel,
+    [string]$ClaudeSonnetModel,
+    [string]$ClaudeHaikuModel,
+    [string]$ClaudeFableModel
   )
 
   $settingsDirectory = Split-Path -Parent $SettingsFile
@@ -90,9 +110,10 @@ function Update-ClaudeSettings {
   $settings.env | Add-Member -NotePropertyName ANTHROPIC_BASE_URL -NotePropertyValue $ProviderBaseUrl -Force
   $settings.env | Add-Member -NotePropertyName ANTHROPIC_AUTH_TOKEN -NotePropertyValue $AuthToken -Force
   $settings.env | Add-Member -NotePropertyName ANTHROPIC_MODEL -NotePropertyValue $ClaudeModel -Force
-  foreach ($family in @("FABLE", "OPUS", "SONNET", "HAIKU")) {
-    $settings.env | Add-Member -NotePropertyName "ANTHROPIC_DEFAULT_${family}_MODEL" -NotePropertyValue $ClaudeModel -Force
-  }
+  $settings.env | Add-Member -NotePropertyName ANTHROPIC_DEFAULT_FABLE_MODEL -NotePropertyValue $ClaudeFableModel -Force
+  $settings.env | Add-Member -NotePropertyName ANTHROPIC_DEFAULT_OPUS_MODEL -NotePropertyValue $ClaudeOpusModel -Force
+  $settings.env | Add-Member -NotePropertyName ANTHROPIC_DEFAULT_SONNET_MODEL -NotePropertyValue $ClaudeSonnetModel -Force
+  $settings.env | Add-Member -NotePropertyName ANTHROPIC_DEFAULT_HAIKU_MODEL -NotePropertyValue $ClaudeHaikuModel -Force
 
   $backupFile = $null
   $temporarySettings = "$SettingsFile.eggai.tmp.$([guid]::NewGuid())"
@@ -137,8 +158,12 @@ if ($EggAiMode -and [string]::IsNullOrWhiteSpace($Sk_Key)) {
 if ($EggAiMode -and [string]::IsNullOrWhiteSpace($Model)) {
   Throw-InstallError "model is required with EggAi mode. Set MODEL, ANTHROPIC_MODEL, or pass -Model."
 }
-if ($EggAiMode -and $Model -notmatch "^[A-Za-z0-9._:/-]+$") {
-  Throw-InstallError "model contains unsupported characters."
+if ($EggAiMode) {
+  foreach ($configuredModel in @($Model, $OpusModel, $SonnetModel, $HaikuModel, $FableModel)) {
+    if ([string]::IsNullOrWhiteSpace($configuredModel) -or $configuredModel -notmatch "^[A-Za-z0-9._:/-]+$") {
+      Throw-InstallError "model contains unsupported characters."
+    }
+  }
 }
 
 $userHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
@@ -156,6 +181,10 @@ if ($DryRun) {
     Write-Host "Backup file: $settingsFile.eggai.bak"
     Write-Host "Anthropic Base URL: $anthropicBaseUrl"
     Write-Host "Model: $Model"
+    Write-Host "Opus model: $OpusModel"
+    Write-Host "Sonnet model: $SonnetModel"
+    Write-Host "Haiku model: $HaikuModel"
+    Write-Host "Fable model: $FableModel"
     Write-Host "API key: provided (redacted)"
     Write-Host "Would modify Claude Code configuration: yes"
   } else {
@@ -267,7 +296,15 @@ Write-Host $versionOutput
 
 if ($EggAiMode) {
   Write-Host "Writing EggAi Claude Code configuration..."
-  $backupFile = Update-ClaudeSettings -SettingsFile $settingsFile -ProviderBaseUrl $anthropicBaseUrl -AuthToken $Sk_Key -ClaudeModel $Model
+  $backupFile = Update-ClaudeSettings `
+    -SettingsFile $settingsFile `
+    -ProviderBaseUrl $anthropicBaseUrl `
+    -AuthToken $Sk_Key `
+    -ClaudeModel $Model `
+    -ClaudeOpusModel $OpusModel `
+    -ClaudeSonnetModel $SonnetModel `
+    -ClaudeHaikuModel $HaikuModel `
+    -ClaudeFableModel $FableModel
   Write-Host "Done: Claude Code is installed and configured to use EggAi."
   Write-Host "Settings: $settingsFile"
   Write-Host "Backup: $backupFile"

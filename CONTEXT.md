@@ -49,7 +49,7 @@ A reader-facing installer script that turns Codex + EggAi setup into a parameter
 _Avoid_: Shell snippet, manual Codex tutorial
 
 **Claude Code Setup Script**:
-A reader-facing installer that delegates installation and updates to Anthropic's native Claude Code installer. Its default mode leaves authentication and configuration unchanged; its explicit EggAi mode backs up and merges the Selected API Credential into user-level Claude Code settings.
+A reader-facing installer that delegates installation and updates to Anthropic's native Claude Code installer. Its default mode leaves authentication and configuration unchanged; its explicit EggAi mode validates the gateway, then backs up and merges the Selected API Credential and role-specific model mappings into user-level Claude Code settings so no second Claude login is required.
 _Avoid_: Claude login script, shared-key installer
 
 **EggAi Provider**:

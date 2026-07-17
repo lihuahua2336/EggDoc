@@ -14,18 +14,22 @@ export function buildClaudeCodeShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  model,
+  models,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  model: string;
+  models: ClaudeCodeModels;
 }) {
   const anthropicBaseUrl = normalizeClaudeCodeBaseUrl(baseUrl);
   return (
     `curl -fsSL ${quoteShellArgument(installerUrl(installerOrigin, "claude-code.sh"))} | sh -s -- ` +
     `--eggai --sk-key ${quoteShellArgument(apiKey)} --baseurl ${quoteShellArgument(anthropicBaseUrl)} ` +
-    `--model ${quoteShellArgument(model)}`
+    `--model ${quoteShellArgument(models.main)} ` +
+    `--opus-model ${quoteShellArgument(models.opus)} ` +
+    `--sonnet-model ${quoteShellArgument(models.sonnet)} ` +
+    `--haiku-model ${quoteShellArgument(models.haiku)} ` +
+    `--fable-model ${quoteShellArgument(models.fable)}`
   );
 }
 
@@ -33,18 +37,22 @@ export function buildClaudeCodePowerShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  model,
+  models,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  model: string;
+  models: ClaudeCodeModels;
 }) {
   const anthropicBaseUrl = normalizeClaudeCodeBaseUrl(baseUrl);
   return (
     `& ([scriptblock]::Create((irm ${quotePowerShellArgument(installerUrl(installerOrigin, "claude-code.ps1"))}))) ` +
     `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} -BaseUrl ${quotePowerShellArgument(anthropicBaseUrl)} ` +
-    `-Model ${quotePowerShellArgument(model)}`
+    `-Model ${quotePowerShellArgument(models.main)} ` +
+    `-OpusModel ${quotePowerShellArgument(models.opus)} ` +
+    `-SonnetModel ${quotePowerShellArgument(models.sonnet)} ` +
+    `-HaikuModel ${quotePowerShellArgument(models.haiku)} ` +
+    `-FableModel ${quotePowerShellArgument(models.fable)}`
   );
 }
 
@@ -53,11 +61,56 @@ export function normalizeClaudeCodeBaseUrl(baseUrl: string) {
   return withoutTrailingSlashes.replace(/\/v1$/i, "");
 }
 
-export function selectClaudeCodeModel(modelNames: string[]) {
-  const claudeModels = modelNames.filter((name) => name.toLowerCase().includes("claude"));
-  return (
-    claudeModels.find((name) => name.toLowerCase().includes("sonnet")) ?? claudeModels[0]
-  );
+export type ClaudeCodeModels = {
+  fable: string;
+  haiku: string;
+  main: string;
+  opus: string;
+  sonnet: string;
+};
+
+export function selectClaudeCodeModels(modelNames: string[]): ClaudeCodeModels | undefined {
+  const sonnet = selectFamilyModel(modelNames, "sonnet", ["claude-sonnet-5"]);
+  const opus = selectFamilyModel(modelNames, "opus", ["claude-opus-4-8"]);
+  const fable = selectFamilyModel(modelNames, "fable", ["claude-fable-5"]);
+  const haiku = selectFamilyModel(modelNames, "haiku");
+  const main = sonnet ?? opus ?? fable ?? haiku;
+  if (!main) return undefined;
+
+  return {
+    fable: fable ?? sonnet ?? main,
+    haiku: haiku ?? fable ?? sonnet ?? main,
+    main,
+    opus: opus ?? main,
+    sonnet: sonnet ?? main,
+  };
+}
+
+function selectFamilyModel(modelNames: string[], family: string, preferred: string[] = []) {
+  const familyPrefix = `claude-${family}`;
+  const candidates = modelNames.filter((name) => {
+    const basename = name.toLowerCase().split("/").at(-1) ?? "";
+    return basename === familyPrefix || basename.startsWith(`${familyPrefix}-`);
+  });
+  for (const preferredName of preferred) {
+    const match = candidates.find(
+      (name) => (name.toLowerCase().split("/").at(-1) ?? "") === preferredName,
+    );
+    if (match) return match;
+  }
+  return candidates.sort((left, right) => compareModelVersions(right, left, family))[0];
+}
+
+function compareModelVersions(left: string, right: string, family: string) {
+  const versionPattern = new RegExp(`claude-${family}-(\\d+(?:[-.]\\d+)*)`, "i");
+  const leftParts = left.match(versionPattern)?.[1].split(/[-.]/).map(Number) ?? [];
+  const rightParts = right.match(versionPattern)?.[1].split(/[-.]/).map(Number) ?? [];
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return left.localeCompare(right);
 }
 
 function quoteShellArgument(value: string) {

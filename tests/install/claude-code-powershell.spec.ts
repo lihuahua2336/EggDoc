@@ -138,12 +138,22 @@ test("Claude Code PowerShell EggAi dry-run validates inputs and redacts the cred
     "-BaseUrl",
     "https://api.example.test/v1",
     "-Model",
-    "claude-sonnet-4-5",
+    "claude-sonnet-5",
+    "-OpusModel",
+    "claude-opus-4-8",
+    "-SonnetModel",
+    "claude-sonnet-5",
+    "-HaikuModel",
+    "claude-fable-5",
+    "-FableModel",
+    "claude-fable-5",
   ]);
 
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Mode: eggai");
   expect(result.stdout).toContain("Anthropic Base URL: https://api.example.test");
+  expect(result.stdout).toContain("Opus model: claude-opus-4-8");
+  expect(result.stdout).toContain("Haiku model: claude-fable-5");
   expect(result.stdout).toContain("API key: provided (redacted)");
   expect(result.stdout).toContain("Would modify Claude Code configuration: yes");
   expect(result.stdout).not.toContain("sk-EGGDOC-POWERSHELL-SECRET");
@@ -230,7 +240,7 @@ New-Item -ItemType Directory -Force -Path $claudeBin | Out-Null
 Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBin "claude.exe") -Force
 `,
     false,
-    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-CONFIG' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-5'",
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-CONFIG' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-5' -OpusModel 'claude-opus-4-8' -SonnetModel 'claude-sonnet-5' -HaikuModel 'claude-fable-5' -FableModel 'claude-fable-5'",
     initialSettings,
   );
 
@@ -242,11 +252,11 @@ Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBi
     env: {
       ANTHROPIC_AUTH_TOKEN: "sk-EGGDOC-POWERSHELL-CONFIG",
       ANTHROPIC_BASE_URL: "https://api.example.test",
-      ANTHROPIC_DEFAULT_FABLE_MODEL: "claude-sonnet-4-5",
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-sonnet-4-5",
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-sonnet-4-5",
-      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-5",
-      ANTHROPIC_MODEL: "claude-sonnet-4-5",
+      ANTHROPIC_DEFAULT_FABLE_MODEL: "claude-fable-5",
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-fable-5",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-5",
+      ANTHROPIC_MODEL: "claude-sonnet-5",
       KEEP_ME: "yes",
     },
     permissions: { allow: ["Read"] },

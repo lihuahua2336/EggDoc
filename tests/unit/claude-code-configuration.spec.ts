@@ -6,7 +6,7 @@ import {
   buildClaudeCodeShellDefaultInstallCommand,
   buildClaudeCodeShellInstallCommand,
   normalizeClaudeCodeBaseUrl,
-  selectClaudeCodeModel,
+  selectClaudeCodeModels,
 } from "../../src/lib/claude-code/configuration";
 
 test("default commands install Claude Code without changing its provider", () => {
@@ -24,12 +24,20 @@ test("EggAi commands safely quote the selected Claude Code credential and URL", 
       apiKey: "sk-reader's-$HOME",
       baseUrl: "https://api.example.test/v1",
       installerOrigin: "https://docs.example.test/root",
-      model: "claude-sonnet-4-5",
+      models: {
+        fable: "claude-fable-5",
+        haiku: "claude-fable-5",
+        main: "claude-sonnet-5",
+        opus: "claude-opus-4-8",
+        sonnet: "claude-sonnet-5",
+      },
     }),
   ).toBe(
     "curl -fsSL 'https://docs.example.test/root/install/claude-code.sh' | sh -s -- " +
       "--eggai --sk-key 'sk-reader'\"'\"'s-$HOME' --baseurl 'https://api.example.test' " +
-      "--model 'claude-sonnet-4-5'",
+      "--model 'claude-sonnet-5' --opus-model 'claude-opus-4-8' " +
+      "--sonnet-model 'claude-sonnet-5' --haiku-model 'claude-fable-5' " +
+      "--fable-model 'claude-fable-5'",
   );
 
   expect(
@@ -37,23 +45,58 @@ test("EggAi commands safely quote the selected Claude Code credential and URL", 
       apiKey: "sk-reader's-$HOME; `exit`",
       baseUrl: "https://api.example.test/v1",
       installerOrigin: "https://docs.example.test/root's",
-      model: "claude-sonnet-4-5",
+      models: {
+        fable: "claude-fable-5",
+        haiku: "claude-fable-5",
+        main: "claude-sonnet-5",
+        opus: "claude-opus-4-8",
+        sonnet: "claude-sonnet-5",
+      },
     }),
   ).toBe(
     "& ([scriptblock]::Create((irm 'https://docs.example.test/root''s/install/claude-code.ps1'))) " +
       "-EggAi -SkKey 'sk-reader''s-$HOME; `exit`' -BaseUrl 'https://api.example.test' " +
-      "-Model 'claude-sonnet-4-5'",
+      "-Model 'claude-sonnet-5' -OpusModel 'claude-opus-4-8' " +
+      "-SonnetModel 'claude-sonnet-5' -HaikuModel 'claude-fable-5' " +
+      "-FableModel 'claude-fable-5'",
   );
 });
 
-test("Claude Code prefers a Sonnet model and rejects a model list without Claude", () => {
-  expect(selectClaudeCodeModel(["gpt-5.2", "claude-haiku-4-5", "claude-sonnet-4-5"])).toBe(
-    "claude-sonnet-4-5",
-  );
-  expect(selectClaudeCodeModel(["anthropic/claude-opus-4-1", "gpt-5.2"])).toBe(
-    "anthropic/claude-opus-4-1",
-  );
-  expect(selectClaudeCodeModel(["gpt-5.2", "gemini-3-pro"])).toBeUndefined();
+test("Claude Code assigns the preferred EggAi model for each model role", () => {
+  expect(
+    selectClaudeCodeModels([
+      "gpt-5.2",
+      "claude-opus-4-6",
+      "claude-sonnet-4-6",
+      "claude-fable-5",
+      "claude-opus-4-8",
+      "claude-sonnet-5",
+    ]),
+  ).toEqual({
+    fable: "claude-fable-5",
+    haiku: "claude-fable-5",
+    main: "claude-sonnet-5",
+    opus: "claude-opus-4-8",
+    sonnet: "claude-sonnet-5",
+  });
+});
+
+test("Claude Code uses the highest available family versions and rejects a list without Claude", () => {
+  expect(
+    selectClaudeCodeModels([
+      "anthropic/claude-haiku-4-5",
+      "anthropic/claude-opus-4-1",
+      "anthropic/claude-opus-4-7",
+      "anthropic/claude-sonnet-4-5",
+    ]),
+  ).toEqual({
+    fable: "anthropic/claude-sonnet-4-5",
+    haiku: "anthropic/claude-haiku-4-5",
+    main: "anthropic/claude-sonnet-4-5",
+    opus: "anthropic/claude-opus-4-7",
+    sonnet: "anthropic/claude-sonnet-4-5",
+  });
+  expect(selectClaudeCodeModels(["gpt-5.2", "gemini-3-pro"])).toBeUndefined();
 });
 
 test("Claude Code removes the OpenAI v1 suffix before appending Anthropic endpoints", () => {

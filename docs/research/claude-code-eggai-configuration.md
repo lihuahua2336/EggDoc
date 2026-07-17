@@ -154,7 +154,17 @@ ANTHROPIC_DEFAULT_HAIKU_MODEL
 
 来源：[Model discovery](https://code.claude.com/docs/en/llm-gateway-protocol#model-discovery)、[Model environment variables](https://code.claude.com/docs/en/model-config#environment-variables)。
 
-EggAi 当前的 `modelSummary.names` 只是字符串列表，没有协议、家族、能力或默认模型元数据。不能默认取第一个模型，也不能仅按名称猜测 Opus/Sonnet/Haiku/Fable 映射。EggAi 至少需要保证内置 Claude ID 可用，或返回经过验证的家族映射。
+EggAi 当前的 `modelSummary.names` 只是字符串列表，没有协议、家族、能力或默认模型元数据。因此不能默认取第一个模型。当前产品契约明确提供以下 Claude 模型名称，EggDoc 据此按家族生成映射；长期仍建议 EggAi API 返回经过验证的结构化家族映射。
+
+| Claude Code 角色 | 首选 EggAi 模型 | 回退规则 |
+| --- | --- | --- |
+| 主模型 | `claude-sonnet-5` | 最高版本 Sonnet，再依次使用 Opus、Fable、Haiku |
+| Sonnet | `claude-sonnet-5` | 最高版本 Sonnet，最后使用主模型 |
+| Opus | `claude-opus-4-8` | 最高版本 Opus，最后使用主模型 |
+| Fable | `claude-fable-5` | 最高版本 Fable，再使用 Sonnet 或主模型 |
+| Haiku | `claude-fable-5` | 账户没有 Haiku 时使用 Fable，再使用 Sonnet 或主模型 |
+
+`claude-opus-4-6` 和 `claude-sonnet-4-6` 保留为对应家族的可用模型，但不覆盖版本更高的默认值。Claude Code 的静态网关配置是“主模型加家族默认值”，不是把模型目录中的每个 ID 都逐项写进 `settings.json`。
 
 `ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES` 只适用于 Bedrock、Google Cloud、Microsoft Foundry 等提供商配置；在普通 `ANTHROPIC_BASE_URL` 网关后不能靠这些变量声明虚假的 thinking 或 effort 能力。模型 ID 的 `_NAME` 和 `_DESCRIPTION` 可用于网关显示名称，但功能仍取决于真实协议支持。来源：[Customize pinned model display and capabilities](https://code.claude.com/docs/en/model-config#customize-pinned-model-display-and-capabilities)。
 
@@ -227,16 +237,16 @@ EggDoc 实现应遵守：
 
 产品要求是在安装页提供和 Codex 相同的 `无配置安装` 与 `EggAi 配置` 双模式。为避免仅根据通用 Base URL 猜测兼容性，一键脚本执行：
 
-1. 安装或更新 Claude Code。
-2. 从 EggAi 模型列表选择 Sonnet 优先的 Claude 模型，验证 key 和 HTTPS Base URL，并把末尾明确的 `/v1` 规范化掉。
-3. 用所选 key 和模型发送一次 `max_tokens: 16` 的强制工具调用流式请求；只有返回 Anthropic SSE、Messages ID、tool-use block 和 message-stop 才继续。
+1. 从 EggAi 模型列表生成主模型、Sonnet、Opus、Haiku 和 Fable 的明确映射，验证 key 和 HTTPS Base URL，并把末尾明确的 `/v1` 规范化掉。
+2. 用所选 key 和主模型发送一次 `max_tokens: 16` 的强制工具调用流式请求；只有返回 Anthropic SSE、Messages ID、tool-use block 和 message-stop 才继续。
+3. 安装或更新 Claude Code。
 4. 备份并结构化合并 `~/.claude/settings.json`。
-5. 写入 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_MODEL` 和各模型家族映射，同时删除冲突的 `ANTHROPIC_API_KEY`。
-6. 保留全部无关设置；解析或写入失败时保持原文件不变。
+5. 写入 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_MODEL` 和四个家族默认模型，同时删除冲突的 `ANTHROPIC_API_KEY`。
+6. 保留全部无关设置；解析或写入失败时保持原文件不变。安装器只收到旧版单模型参数时，各家族默认值回退到主模型，以保持向后兼容。
 
 自动化测试使用本地固定凭据验证配置文件、界面行为、失败状态和流式工具调用响应形状，不向真实 EggAi 网关发送计费请求。Reader 运行 EggAi 命令时会对其所选分组执行真实的流式工具调用检查。Claude Code 交互式 `/status` 和长时间后台工作流不在脚本内自动执行；ADR 0033 明确记录并接受这一残余风险。
 
-即使这些步骤全部完成，也应描述为“安装并配置 EggAi 网关”，而不是“已登录 Claude”。网关凭据会覆盖但不会删除用户原有的 claude.ai 登录；移除网关变量后原登录仍可恢复使用。
+即使这些步骤全部完成，也应描述为“安装并配置 EggAi 网关”，而不是“已登录 Claude”。`ANTHROPIC_AUTH_TOKEN` 的认证优先级高于保存的 claude.ai 登录，因此配置存在时无需二次登录；网关凭据会覆盖但不会删除用户原有的 claude.ai 登录，移除网关变量后原登录仍可恢复使用。
 
 ## 来源
 

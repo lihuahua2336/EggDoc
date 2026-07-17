@@ -8,6 +8,10 @@ DRY_RUN="${DRY_RUN:-0}"
 BASE_URL="${BASE_URL:-https://api.eggai.icu/v1}"
 SK_KEY="${SK_KEY:-${EGGAI_API_KEY:-}}"
 MODEL="${MODEL:-${ANTHROPIC_MODEL:-}}"
+OPUS_MODEL="${OPUS_MODEL:-${ANTHROPIC_DEFAULT_OPUS_MODEL:-}}"
+SONNET_MODEL="${SONNET_MODEL:-${ANTHROPIC_DEFAULT_SONNET_MODEL:-}}"
+HAIKU_MODEL="${HAIKU_MODEL:-${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}}"
+FABLE_MODEL="${FABLE_MODEL:-${ANTHROPIC_DEFAULT_FABLE_MODEL:-}}"
 EGGAI_MODE=0
 CLAUDE_HOME="$HOME/.claude"
 SETTINGS_FILE="$CLAUDE_HOME/settings.json"
@@ -24,12 +28,17 @@ Options:
   --sk-key <key>     Required with --eggai. EggAi API key.
   --baseurl <url>    Optional. Default: https://api.eggai.icu/v1
   --model <id>       Required with --eggai. Claude model available to this account.
+  --opus-model <id>  Optional. Opus role model. Defaults to --model.
+  --sonnet-model <id> Optional. Sonnet role model. Defaults to --model.
+  --haiku-model <id> Optional. Haiku role model. Defaults to --model.
+  --fable-model <id> Optional. Fable role model. Defaults to --model.
   --version <value>   latest, stable, or a numeric dotted version. Default: latest
   --dry-run           Check what would happen without downloading or installing.
   --help              Show this help.
 
 Environment variables are also supported:
-  CLAUDE_CODE_VERSION, SK_KEY, EGGAI_API_KEY, BASE_URL, MODEL, ANTHROPIC_MODEL, DRY_RUN
+  CLAUDE_CODE_VERSION, SK_KEY, EGGAI_API_KEY, BASE_URL, MODEL, ANTHROPIC_MODEL,
+  OPUS_MODEL, SONNET_MODEL, HAIKU_MODEL, FABLE_MODEL, DRY_RUN
 EOF
 }
 
@@ -75,6 +84,26 @@ while [ "$#" -gt 0 ]; do
       MODEL="$2"
       shift 2
       ;;
+    --opus-model)
+      [ "$#" -ge 2 ] || fail "$1 requires a value."
+      OPUS_MODEL="$2"
+      shift 2
+      ;;
+    --sonnet-model)
+      [ "$#" -ge 2 ] || fail "$1 requires a value."
+      SONNET_MODEL="$2"
+      shift 2
+      ;;
+    --haiku-model)
+      [ "$#" -ge 2 ] || fail "$1 requires a value."
+      HAIKU_MODEL="$2"
+      shift 2
+      ;;
+    --fable-model)
+      [ "$#" -ge 2 ] || fail "$1 requires a value."
+      FABLE_MODEL="$2"
+      shift 2
+      ;;
     --version|--channel)
       [ "$#" -ge 2 ] || fail "$1 requires a value."
       INSTALL_TARGET="$2"
@@ -114,9 +143,15 @@ normalize_base_url() {
 if [ "$EGGAI_MODE" = "1" ]; then
   [ -n "$SK_KEY" ] || fail "sk-key is required with --eggai. Pass --sk-key or set SK_KEY."
   [ -n "$MODEL" ] || fail "model is required with --eggai. Pass --model or set MODEL."
-  case "$MODEL" in
-    *[!A-Za-z0-9._:/-]*) fail "model contains unsupported characters." ;;
-  esac
+  OPUS_MODEL="${OPUS_MODEL:-$MODEL}"
+  SONNET_MODEL="${SONNET_MODEL:-$MODEL}"
+  HAIKU_MODEL="${HAIKU_MODEL:-$MODEL}"
+  FABLE_MODEL="${FABLE_MODEL:-$MODEL}"
+  for configured_model in "$MODEL" "$OPUS_MODEL" "$SONNET_MODEL" "$HAIKU_MODEL" "$FABLE_MODEL"; do
+    case "$configured_model" in
+      *[!A-Za-z0-9._:/-]*) fail "model contains unsupported characters." ;;
+    esac
+  done
   case "$BASE_URL" in
     https://?*) ;;
     *) fail "baseurl must be an HTTPS URL." ;;
@@ -144,6 +179,10 @@ if [ "$DRY_RUN" = "1" ]; then
     echo "Backup file: $SETTINGS_FILE.eggai.bak"
     echo "Anthropic Base URL: $ANTHROPIC_BASE_URL"
     echo "Model: $MODEL"
+    echo "Opus model: $OPUS_MODEL"
+    echo "Sonnet model: $SONNET_MODEL"
+    echo "Haiku model: $HAIKU_MODEL"
+    echo "Fable model: $FABLE_MODEL"
     echo "API key: provided (redacted)"
     echo "Would modify Claude Code configuration: yes"
   else
@@ -362,6 +401,10 @@ chmod 600 "$SETTINGS_TMP"
 export EGGDOC_ANTHROPIC_BASE_URL="$ANTHROPIC_BASE_URL"
 export EGGDOC_ANTHROPIC_AUTH_TOKEN="$SK_KEY"
 export EGGDOC_ANTHROPIC_MODEL="$MODEL"
+export EGGDOC_ANTHROPIC_OPUS_MODEL="$OPUS_MODEL"
+export EGGDOC_ANTHROPIC_SONNET_MODEL="$SONNET_MODEL"
+export EGGDOC_ANTHROPIC_HAIKU_MODEL="$HAIKU_MODEL"
+export EGGDOC_ANTHROPIC_FABLE_MODEL="$FABLE_MODEL"
 
 case "$JSON_ENGINE" in
   node)
@@ -380,10 +423,10 @@ delete settings.env.ANTHROPIC_API_KEY;
 settings.env.ANTHROPIC_BASE_URL = process.env.EGGDOC_ANTHROPIC_BASE_URL;
 settings.env.ANTHROPIC_AUTH_TOKEN = process.env.EGGDOC_ANTHROPIC_AUTH_TOKEN;
 settings.env.ANTHROPIC_MODEL = process.env.EGGDOC_ANTHROPIC_MODEL;
-settings.env.ANTHROPIC_DEFAULT_FABLE_MODEL = process.env.EGGDOC_ANTHROPIC_MODEL;
-settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = process.env.EGGDOC_ANTHROPIC_MODEL;
-settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = process.env.EGGDOC_ANTHROPIC_MODEL;
-settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = process.env.EGGDOC_ANTHROPIC_MODEL;
+settings.env.ANTHROPIC_DEFAULT_FABLE_MODEL = process.env.EGGDOC_ANTHROPIC_FABLE_MODEL;
+settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = process.env.EGGDOC_ANTHROPIC_OPUS_MODEL;
+settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = process.env.EGGDOC_ANTHROPIC_SONNET_MODEL;
+settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = process.env.EGGDOC_ANTHROPIC_HAIKU_MODEL;
 fs.writeFileSync(target, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
 NODE
     ;;
@@ -403,7 +446,7 @@ env["ANTHROPIC_BASE_URL"] = os.environ["EGGDOC_ANTHROPIC_BASE_URL"]
 env["ANTHROPIC_AUTH_TOKEN"] = os.environ["EGGDOC_ANTHROPIC_AUTH_TOKEN"]
 env["ANTHROPIC_MODEL"] = os.environ["EGGDOC_ANTHROPIC_MODEL"]
 for family in ("FABLE", "OPUS", "SONNET", "HAIKU"):
-    env[f"ANTHROPIC_DEFAULT_{family}_MODEL"] = os.environ["EGGDOC_ANTHROPIC_MODEL"]
+    env[f"ANTHROPIC_DEFAULT_{family}_MODEL"] = os.environ[f"EGGDOC_ANTHROPIC_{family}_MODEL"]
 with open(target, "w", encoding="utf-8") as handle:
     json.dump(settings, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
@@ -412,6 +455,8 @@ PYTHON
     ;;
   jq)
     jq --arg base_url "$ANTHROPIC_BASE_URL" --arg auth_token "$SK_KEY" --arg model "$MODEL" \
+      --arg opus_model "$OPUS_MODEL" --arg sonnet_model "$SONNET_MODEL" \
+      --arg haiku_model "$HAIKU_MODEL" --arg fable_model "$FABLE_MODEL" \
       'if type != "object" then error("settings.json must contain a JSON object") else . end
        | .env = (.env // {})
        | if (.env | type) != "object" then error("settings.json env must contain a JSON object") else . end
@@ -419,10 +464,10 @@ PYTHON
        | .env.ANTHROPIC_BASE_URL = $base_url
        | .env.ANTHROPIC_AUTH_TOKEN = $auth_token
        | .env.ANTHROPIC_MODEL = $model
-       | .env.ANTHROPIC_DEFAULT_FABLE_MODEL = $model
-       | .env.ANTHROPIC_DEFAULT_OPUS_MODEL = $model
-       | .env.ANTHROPIC_DEFAULT_SONNET_MODEL = $model
-       | .env.ANTHROPIC_DEFAULT_HAIKU_MODEL = $model' \
+       | .env.ANTHROPIC_DEFAULT_FABLE_MODEL = $fable_model
+       | .env.ANTHROPIC_DEFAULT_OPUS_MODEL = $opus_model
+       | .env.ANTHROPIC_DEFAULT_SONNET_MODEL = $sonnet_model
+       | .env.ANTHROPIC_DEFAULT_HAIKU_MODEL = $haiku_model' \
       "$SETTINGS_SOURCE" > "$SETTINGS_TMP"
     ;;
   perl)
@@ -441,7 +486,7 @@ PYTHON
       $settings->{env}->{ANTHROPIC_AUTH_TOKEN} = $ENV{EGGDOC_ANTHROPIC_AUTH_TOKEN};
       $settings->{env}->{ANTHROPIC_MODEL} = $ENV{EGGDOC_ANTHROPIC_MODEL};
       for my $family (qw(FABLE OPUS SONNET HAIKU)) {
-        $settings->{env}->{"ANTHROPIC_DEFAULT_${family}_MODEL"} = $ENV{EGGDOC_ANTHROPIC_MODEL};
+        $settings->{env}->{"ANTHROPIC_DEFAULT_${family}_MODEL"} = $ENV{"EGGDOC_ANTHROPIC_${family}_MODEL"};
       }
       open my $output, ">:raw", $target or die "cannot write temporary settings: $!";
       print {$output} JSON::PP->new->utf8->pretty->encode($settings);

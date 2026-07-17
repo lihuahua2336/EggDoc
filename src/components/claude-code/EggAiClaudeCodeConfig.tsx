@@ -25,7 +25,7 @@ import {
   buildClaudeCodePowerShellInstallCommand,
   buildClaudeCodeShellDefaultInstallCommand,
   buildClaudeCodeShellInstallCommand,
-  selectClaudeCodeModel,
+  selectClaudeCodeModels,
 } from "@/lib/claude-code/configuration";
 
 type CopyStatus = "idle" | "copied" | "error";
@@ -154,11 +154,17 @@ export function EggAiClaudeCodeConfig() {
       : undefined;
   const apiKey = selectedCredential?.key ?? CONFIGURATION_PLACEHOLDER;
   const baseUrl = selectedCredential?.baseUrl ?? PUBLIC_EGGAI_BASE_URL;
-  const claudeModel =
+  const claudeModels =
     accountState.kind === "active"
-      ? selectClaudeCodeModel(accountState.modelSummary.names)
+      ? selectClaudeCodeModels(accountState.modelSummary.names)
       : undefined;
-  const modelForPreview = claudeModel ?? "claude-model-unavailable";
+  const modelsForPreview = claudeModels ?? {
+    fable: "claude-model-unavailable",
+    haiku: "claude-model-unavailable",
+    main: "claude-model-unavailable",
+    opus: "claude-model-unavailable",
+    sonnet: "claude-model-unavailable",
+  };
   const officialCommand =
     platform === "windows"
       ? buildClaudeCodePowerShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN)
@@ -169,13 +175,13 @@ export function EggAiClaudeCodeConfig() {
           apiKey,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-          model: modelForPreview,
+          models: modelsForPreview,
         })
       : buildClaudeCodeShellInstallCommand({
           apiKey,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-          model: modelForPreview,
+          models: modelsForPreview,
         });
   const command = mode === "official" ? officialCommand : eggAiCommand;
 
@@ -198,33 +204,44 @@ export function EggAiClaudeCodeConfig() {
     );
   } else if (accountState.kind === "active") {
     eggAiAccount = (
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-        <div className="min-w-0">
-          <label className="text-sm font-medium" htmlFor="claude-code-eggai-api-credential">
-            EggAi 配置分组
-          </label>
-          <select
-            className="mt-2 h-10 w-full rounded-sm border border-border bg-background px-3 text-sm text-foreground"
-            id="claude-code-eggai-api-credential"
-            onChange={(event) => setSelectedCredentialId(event.target.value)}
-            value={selectedCredential?.id}
-          >
-            {accountState.credentials.map((credential, index) => (
-              <option key={credential.id} value={credential.id}>
-                {index === 0 ? "默认 · " : ""}
-                {credential.name} · {credential.group}
-              </option>
-            ))}
-          </select>
+      <div>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div className="min-w-0">
+            <label className="text-sm font-medium" htmlFor="claude-code-eggai-api-credential">
+              EggAi 配置分组
+            </label>
+            <select
+              className="mt-2 h-10 w-full rounded-sm border border-border bg-background px-3 text-sm text-foreground"
+              id="claude-code-eggai-api-credential"
+              onChange={(event) => setSelectedCredentialId(event.target.value)}
+              value={selectedCredential?.id}
+            >
+              {accountState.credentials.map((credential, index) => (
+                <option key={credential.id} value={credential.id}>
+                  {index === 0 ? "默认 · " : ""}
+                  {credential.name} · {credential.group}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="inline-flex items-center gap-2 pb-2 text-sm text-muted-foreground">
+            {claudeModels ? (
+              <CircleCheck aria-hidden="true" className="h-4 w-4 text-primary" />
+            ) : (
+              <CircleAlert aria-hidden="true" className="h-4 w-4 text-destructive" />
+            )}
+            {claudeModels ? "已就绪" : "暂无可用 Claude 模型"}
+          </p>
         </div>
-        <p className="inline-flex items-center gap-2 pb-2 text-sm text-muted-foreground">
-          {claudeModel ? (
-            <CircleCheck aria-hidden="true" className="h-4 w-4 text-primary" />
-          ) : (
-            <CircleAlert aria-hidden="true" className="h-4 w-4 text-destructive" />
-          )}
-          {claudeModel ? "已就绪" : "暂无可用 Claude 模型"}
-        </p>
+        {claudeModels && (
+          <p
+            className="mt-3 text-xs leading-5 text-muted-foreground"
+            data-testid="claude-code-model-summary"
+          >
+            主模型 {claudeModels.main} · Opus {claudeModels.opus} · Fable / Haiku{" "}
+            {claudeModels.fable}
+          </p>
+        )}
       </div>
     );
   } else if (accountState.kind === "anonymous") {
@@ -356,9 +373,9 @@ export function EggAiClaudeCodeConfig() {
 
         <QuickCopyCommand
           command={command}
-          disabled={mode === "eggai" && (!selectedCredential || !claudeModel)}
+          disabled={mode === "eggai" && (!selectedCredential || !claudeModels)}
           disabledLabel={selectedCredential ? "暂无可用 Claude 模型" : "登录 EggAi 后复制"}
-          resetKey={`${mode}\u0000${platform}\u0000${apiKey}\u0000${baseUrl}\u0000${claudeModel}`}
+          resetKey={`${mode}\u0000${platform}\u0000${apiKey}\u0000${baseUrl}\u0000${JSON.stringify(claudeModels)}`}
         />
 
         {mode === "eggai" && (

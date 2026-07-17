@@ -159,12 +159,22 @@ test("Claude Code Shell EggAi dry-run validates inputs and redacts the credentia
     "--baseurl",
     "https://api.example.test/v1",
     "--model",
-    "claude-sonnet-4-5",
+    "claude-sonnet-5",
+    "--opus-model",
+    "claude-opus-4-8",
+    "--sonnet-model",
+    "claude-sonnet-5",
+    "--haiku-model",
+    "claude-fable-5",
+    "--fable-model",
+    "claude-fable-5",
   ]);
 
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Mode: eggai");
   expect(result.stdout).toContain("Anthropic Base URL: https://api.example.test");
+  expect(result.stdout).toContain("Opus model: claude-opus-4-8");
+  expect(result.stdout).toContain("Haiku model: claude-fable-5");
   expect(result.stdout).toContain("API key: provided (redacted)");
   expect(result.stdout).toContain("Would modify Claude Code configuration: yes");
   expect(result.stdout).not.toContain("sk-EGGDOC-SHELL-SECRET");
@@ -247,7 +257,15 @@ chmod +x "$HOME/.local/bin/claude"
       "--baseurl",
       "https://api.example.test/v1",
       "--model",
-      "claude-sonnet-4-5",
+      "claude-sonnet-5",
+      "--opus-model",
+      "claude-opus-4-8",
+      "--sonnet-model",
+      "claude-sonnet-5",
+      "--haiku-model",
+      "claude-fable-5",
+      "--fable-model",
+      "claude-fable-5",
     ],
     initialSettings,
   );
@@ -259,11 +277,11 @@ chmod +x "$HOME/.local/bin/claude"
     env: {
       ANTHROPIC_AUTH_TOKEN: "sk-EGGDOC-SHELL-CONFIG",
       ANTHROPIC_BASE_URL: "https://api.example.test",
-      ANTHROPIC_DEFAULT_FABLE_MODEL: "claude-sonnet-4-5",
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-sonnet-4-5",
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-sonnet-4-5",
-      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-5",
-      ANTHROPIC_MODEL: "claude-sonnet-4-5",
+      ANTHROPIC_DEFAULT_FABLE_MODEL: "claude-fable-5",
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-fable-5",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-5",
+      ANTHROPIC_MODEL: "claude-sonnet-5",
       KEEP_ME: "yes",
     },
     permissions: { allow: ["Read"] },
