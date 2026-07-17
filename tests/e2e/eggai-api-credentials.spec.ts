@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 const SINGLE_KEY = "sk-EGGDOC-SINGLE-FIXTURE-ONLY";
+const SECONDARY_KEY = "sk-EGGDOC-SECONDARY-FIXTURE-ONLY";
 
 async function setEcosystemMode(request: APIRequestContext, mode: string) {
   await request.post(`http://127.0.0.1:4323/control/ecosystem?mode=${mode}`);
@@ -56,12 +57,13 @@ test("the first credential is default and another configuration group can be sel
   await expect(selector).toContainText("默认 · Codex primary · default");
   await selector.selectOption("202");
   await expect(selector).toHaveValue("202");
+  await expect(panel.getByTestId("codex-quick-command")).toContainText(SECONDARY_KEY);
 
   await panel.getByRole("button", { name: "复制安装命令" }).click();
   await expect(panel.getByRole("button", { name: "安装命令已复制" })).toBeVisible();
-  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
-    "https://edge.fixture.eggai.test/v1",
-  );
+  const copiedCommand = page.evaluate(() => navigator.clipboard.readText());
+  await expect(copiedCommand).resolves.toContain(SECONDARY_KEY);
+  await expect(copiedCommand).resolves.toContain("https://edge.fixture.eggai.test/v1");
 
   const persistentValues = await page.evaluate(() => Object.values(localStorage).join("\n"));
   expect(persistentValues).not.toContain("sk-EGGDOC");

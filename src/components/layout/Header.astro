@@ -3,12 +3,11 @@ import { Search } from "lucide-react";
 import { AuthStatus } from "@/components/auth/AuthStatus";
 import { MobileNavigation } from "@/components/layout/MobileNavigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { TOOL_TUTORIALS_LABEL, TOOL_TUTORIALS_PATH } from "@/lib/content";
 
 const navItems = [
   { href: "/", label: "首页" },
-  { href: "/eggai/", label: "EggAi 指南" },
-  { href: "/learn/", label: "AI 编程" },
-  { href: "/notes/", label: "工具与概念" },
+  { href: TOOL_TUTORIALS_PATH, label: TOOL_TUTORIALS_LABEL },
 ];
 ---
 
@@ -27,9 +26,9 @@ const navItems = [
       <span class="mx-4 hidden h-5 w-px bg-border sm:block" aria-hidden="true"></span>
       <a
         class="hidden truncate text-sm font-medium text-muted-foreground hover:text-foreground sm:block"
-        href="/eggai/"
+        href={TOOL_TUTORIALS_PATH}
       >
-        文档
+        {TOOL_TUTORIALS_LABEL}
       </a>
     </div>
     <nav class="hidden items-center gap-1 lg:flex" aria-label="主导航">

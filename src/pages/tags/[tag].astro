@@ -1,10 +1,10 @@
 ---
 import ContentCard from "@/components/article/ContentCard.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { getAllPublishedContent } from "@/lib/content";
+import { getToolTutorials } from "@/lib/content";
 
 export async function getStaticPaths() {
-  const entries = await getAllPublishedContent();
+  const entries = await getToolTutorials();
   const tags = new Set(entries.flatMap((entry) => entry.data.tags));
 
   return Array.from(tags).map((tag) => ({

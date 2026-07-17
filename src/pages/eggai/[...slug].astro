@@ -1,13 +1,11 @@
 ---
-import { getCollection, render } from "astro:content";
+import { render } from "astro:content";
 import { articleMdxComponents } from "@/components/article/mdx-components";
 import ArticleLayout from "@/layouts/ArticleLayout.astro";
-import { getGuideUrl, getRelatedEntries, isPublished } from "@/lib/content";
+import { getGuideUrl, getRelatedEntries, getToolTutorials } from "@/lib/content";
 
 export async function getStaticPaths() {
-  const guides = await getCollection("guides", (entry) => {
-    return isPublished(entry) && entry.data.service === "eggai";
-  });
+  const guides = await getToolTutorials();
 
   return guides.map((entry) => ({
     params: { slug: getGuideUrl(entry).replace(/^\/eggai\//, "").replace(/\/$/, "") },

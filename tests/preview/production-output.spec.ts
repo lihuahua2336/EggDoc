@@ -4,7 +4,6 @@ import path from "node:path";
 import { parse } from "yaml";
 
 const CONFIGURATION_PLACEHOLDER = "sk-EGGDOC-EXAMPLE-REPLACE-ME";
-const TEST_ONLY_ROUTE = "/learn/article-interactions-fixture/";
 const PERSONALIZED_FIXTURE_VALUES = [
   "sk-PERSONALIZED-FIXTURE-MUST-NEVER-SHIP",
   "sk-EGGDOC-SINGLE-FIXTURE-ONLY",
@@ -33,7 +32,7 @@ type ContentFrontmatter = {
 async function getPublishedRoutes() {
   const contentRoot = path.resolve("src/content");
   const contentFiles = (await listFiles(contentRoot)).filter((file) => /\.mdx?$/.test(file));
-  const routes = new Set(["/", "/eggai/", "/learn/", "/notes/", "/search/"]);
+  const routes = new Set(["/", "/eggai/", "/search/"]);
 
   for (const contentFile of contentFiles) {
     const source = await readFile(contentFile, "utf8");
@@ -50,10 +49,6 @@ async function getPublishedRoutes() {
 
     if (slug.startsWith("guides/eggai/")) {
       routes.add(`/${slug.replace(/^guides\//, "")}/`);
-    } else if (slug.startsWith("lessons/ai-programming/")) {
-      routes.add(`/learn/${slug.replace(/^lessons\/ai-programming\/\d+-/, "")}/`);
-    } else if (slug.startsWith("notes/")) {
-      routes.add(`/${slug}/`);
     }
 
     for (const tag of frontmatter.tags ?? []) {
@@ -83,7 +78,7 @@ test("the production build serves Pagefind search and the sitemap", async ({ pag
   const searchInput = page.getByLabel("关键词");
   await expect(searchInput).toBeEnabled();
   await searchInput.fill("EGGDOC");
-  await expect(page.getByRole("heading", { name: "用脚本把 Codex 接入 EggAi" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Codex 安装" })).toBeVisible();
 });
 
 test("every published page is anonymous, prerendered, and included in the sitemap", async ({
@@ -95,7 +90,6 @@ test("every published page is anonymous, prerendered, and included in the sitema
     file.endsWith(".html"),
   );
   const builtRoutes = builtHtmlFiles.map(routeFromBuiltHtml).sort();
-  expect(builtRoutes).not.toContain(TEST_ONLY_ROUTE);
   expect(builtRoutes).toEqual(expectedRoutes);
 
   const responses = await Promise.all(expectedRoutes.map((route) => request.get(route)));
@@ -108,8 +102,6 @@ test("every published page is anonymous, prerendered, and included in the sitema
     const document = new DOMParser().parseFromString(xml, "application/xml");
     return [...document.querySelectorAll("loc")].map((node) => node.textContent);
   }, await sitemapResponse.text());
-  const testOnlyUrl = new URL(TEST_ONLY_ROUTE, "https://eggdoc.pages.dev").href;
-  expect(sitemapUrls).not.toContain(testOnlyUrl);
   expect(sitemapUrls.sort()).toEqual(
     expectedRoutes.map((route) => new URL(route, "https://eggdoc.pages.dev").href).sort(),
   );

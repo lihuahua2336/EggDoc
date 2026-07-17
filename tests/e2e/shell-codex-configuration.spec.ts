@@ -35,6 +35,8 @@ test("an authenticated Reader can copy a one-step EggAi Shell command", async ({
   const panel = page.getByRole("region", { name: "Codex 安装" });
   await panel.getByRole("tab", { name: "EggAi 配置" }).click();
   await expect(panel.getByLabel("EggAi 配置分组")).toHaveValue("101");
+  await expect(panel.getByTestId("codex-quick-command")).toContainText(FIXTURE_KEY);
+  await expect(panel.getByTestId("codex-quick-command")).not.toContainText("sk-REDACTED");
   await panel.getByRole("button", { name: "复制安装命令" }).click();
   await expect(panel.getByRole("button", { name: "安装命令已复制" })).toBeVisible();
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toBe(

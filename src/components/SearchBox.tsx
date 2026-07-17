@@ -114,7 +114,7 @@ export function SearchBox() {
       return "没有找到匹配内容。";
     }
 
-    return "可以搜索 Codex、EggAi、MCP、Agent 等关键词。";
+    return "可以搜索 Codex、Claude Code、EggAi 等关键词。";
   }, [query, results.length, state]);
 
   return (
@@ -130,7 +130,7 @@ export function SearchBox() {
           disabled={state !== "ready"}
           id="search-input"
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索 Codex、EggAi、MCP..."
+          placeholder="搜索 Codex、Claude Code、EggAi..."
           type="search"
           value={query}
         />

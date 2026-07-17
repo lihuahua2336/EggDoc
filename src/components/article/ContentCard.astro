@@ -2,7 +2,7 @@
 import { Badge } from "@/components/ui/badge";
 import {
   formatDate,
-  getEntryUrl,
+  getGuideUrl,
   type ContentEntry,
 } from "@/lib/content";
 
@@ -11,7 +11,7 @@ interface Props {
 }
 
 const { entry } = Astro.props;
-const url = getEntryUrl(entry);
+const url = getGuideUrl(entry);
 ---
 
 <article class="rounded-lg border border-border bg-card p-5 transition-colors hover:border-primary/50">

@@ -69,20 +69,20 @@ test("EggAi cancellation returns to public content with a local error", async ({
 });
 
 test("an EggAi failure returns to public content without upstream details", async ({ page }) => {
-  await page.goto("/auth/login?returnTo=%2Fnotes%2F");
+  await page.goto("/auth/login?returnTo=%2Feggai%2F");
   await page.getByRole("button", { name: "模拟登录失败" }).click();
 
-  await expect(page).toHaveURL(/\/notes\/\?auth_error=failed$/);
+  await expect(page).toHaveURL(/\/eggai\/\?auth_error=failed$/);
   await expect(page.getByRole("status")).toContainText("登录未完成");
   await expect(page.getByText("fixture sensitive failure details")).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "工具与概念" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "工具教程" })).toBeVisible();
 });
 
 test("header and tutorial login actions preserve their public source pages", async ({ page }) => {
-  await page.goto("/notes/");
+  await page.goto("/eggai/");
   await expect(page.getByRole("link", { name: "登录 EggAi" })).toHaveAttribute(
     "href",
-    "/auth/login?returnTo=%2Fnotes%2F",
+    "/auth/login?returnTo=%2Feggai%2F",
   );
   await page.getByRole("link", { name: "登录 EggAi" }).click();
   await expect(page.getByRole("heading", { name: "EggAi 测试登录" })).toBeVisible();
@@ -104,9 +104,9 @@ test("the encrypted EggDoc Session refreshes authorization and exposes only curr
   request,
 }) => {
   await request.post("http://127.0.0.1:4323/control/reset");
-  await page.goto("/auth/login?returnTo=%2Fnotes%2F");
+  await page.goto("/auth/login?returnTo=%2Feggai%2F");
   await page.getByRole("button", { name: "继续登录" }).click();
-  await expect(page).toHaveURL(/\/notes\/$/);
+  await expect(page).toHaveURL(/\/eggai\/$/);
 
   const sessionCookie = (await context.cookies()).find((cookie) => cookie.name === "eggdoc_session");
   expect(sessionCookie).toBeDefined();
@@ -157,14 +157,14 @@ test("a missing or tampered EggDoc Session remains anonymous", async ({ context,
 
 test("a Reader can reauthorize and exit only EggDoc", async ({ context, page, request }) => {
   await request.post("http://127.0.0.1:4323/control/reset");
-  await page.goto("/auth/login?returnTo=%2Fnotes%2F");
+  await page.goto("/auth/login?returnTo=%2Feggai%2F");
   await page.getByRole("button", { name: "继续登录" }).click();
   await expect(page.getByText("测试读者", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "重新授权 EggAi" }).click();
   expect(new URL(page.url()).searchParams.get("prompt")).toBe("consent");
   await page.getByRole("button", { name: "取消登录" }).click();
-  await expect(page).toHaveURL(/\/notes\/\?auth_error=cancelled$/);
+  await expect(page).toHaveURL(/\/eggai\/\?auth_error=cancelled$/);
   await expect(page.getByText("测试读者", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "退出 EggDoc" }).click();

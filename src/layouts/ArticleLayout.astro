@@ -1,12 +1,12 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { Check, Copy, ExternalLink, Video } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import {
   formatDate,
-  getEntryKindLabel,
-  getEntryUrl,
-  getPublishedGuides,
-  type AdjacentEntries,
+  getGuideUrl,
+  getToolTutorials,
+  TOOL_TUTORIALS_LABEL,
+  TOOL_TUTORIALS_PATH,
   type ContentEntry,
 } from "@/lib/content";
 
@@ -19,19 +19,13 @@ type Heading = {
 interface Props {
   entry: ContentEntry;
   headings?: Heading[];
-  adjacent?: AdjacentEntries;
   related?: ContentEntry[];
 }
 
-const { entry, headings = [], adjacent = {}, related = [] } = Astro.props;
+const { entry, headings = [], related = [] } = Astro.props;
 const toc = headings.filter((heading) => heading.depth >= 2 && heading.depth <= 3);
-const canonicalPath = getEntryUrl(entry);
-const videoUrl = entry.collection === "lessons" ? entry.data.videoUrl : undefined;
-const guides = await getPublishedGuides();
-const isInstallGuide = entry.collection === "guides" && entry.data.tags.includes("install");
-const installGuides = guides
-  .filter((guide) => guide.data.service === "eggai" && guide.data.tags.includes("install"))
-  .sort((a, b) => a.data.order - b.data.order);
+const canonicalPath = getGuideUrl(entry);
+const installGuides = await getToolTutorials();
 ---
 
 <BaseLayout
@@ -44,8 +38,8 @@ const installGuides = guides
     <div class="mx-auto flex h-10 max-w-[90rem] items-center gap-2 px-4 text-sm text-muted-foreground sm:px-6">
       <a href="/" class="hover:text-foreground">EggDoc</a>
       <span aria-hidden="true">/</span>
-      <a href={entry.collection === "guides" ? "/eggai/" : "/learn/"} class="hover:text-foreground">
-        {getEntryKindLabel(entry)}
+      <a href={TOOL_TUTORIALS_PATH} class="hover:text-foreground">
+        {TOOL_TUTORIALS_LABEL}
       </a>
       <span aria-hidden="true">/</span>
       <span class="truncate text-foreground">{entry.data.title}</span>
@@ -55,45 +49,34 @@ const installGuides = guides
   <main class="mx-auto grid max-w-[90rem] grid-cols-1 lg:grid-cols-[15rem_minmax(0,46rem)] xl:grid-cols-[15rem_minmax(0,46rem)_13rem]">
     <aside class="hidden border-r border-border lg:block" aria-label="文档导航">
       <nav class="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto px-5 py-8">
-        <a class="block text-sm font-semibold text-foreground" href={isInstallGuide ? "/eggai/" : "/"}>
-          {isInstallGuide ? "AI 编程工具" : "EggDoc 文档"}
+        <a class="block text-sm font-semibold text-foreground" href={TOOL_TUTORIALS_PATH}>
+          {TOOL_TUTORIALS_LABEL}
         </a>
-        {isInstallGuide ? (
-          <>
-            <p class="mt-6 text-xs font-semibold text-muted-foreground">安装</p>
-            <ul class="mt-2 space-y-1 text-sm">
-              {installGuides.map((guide) => (
-                <li>
-                  <a
-                    aria-current={getEntryUrl(guide) === canonicalPath ? "page" : undefined}
-                    class:list={[
-                      "block border-l-2 py-2 pl-3 leading-5 transition-colors",
-                      getEntryUrl(guide) === canonicalPath
-                        ? "border-primary font-semibold text-primary"
-                        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
-                    ]}
-                    href={getEntryUrl(guide)}
-                  >
-                    {guide.data.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <ul class="mt-5 space-y-1 text-sm text-muted-foreground">
+        <p class="mt-6 text-xs font-semibold text-muted-foreground">安装</p>
+        <ul class="mt-2 space-y-1 text-sm">
+          {installGuides.map((guide) => (
             <li>
-              <a class="block py-2 hover:text-foreground" href="/learn/">AI 编程</a>
+              <a
+                aria-current={getGuideUrl(guide) === canonicalPath ? "page" : undefined}
+                class:list={[
+                  "block border-l-2 py-2 pl-3 leading-5 transition-colors",
+                  getGuideUrl(guide) === canonicalPath
+                    ? "border-primary font-semibold text-primary"
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+                ]}
+                href={getGuideUrl(guide)}
+              >
+                {guide.data.title}
+              </a>
             </li>
-            <li><a class="block py-2 hover:text-foreground" href="/notes/">工具与概念</a></li>
-          </ul>
-        )}
+          ))}
+        </ul>
       </nav>
     </aside>
 
     <article class="min-w-0 px-4 py-8 sm:px-8 lg:px-10 lg:py-10" data-pagefind-body>
       <header class="mb-8 border-b border-border pb-7">
-        <p class="mb-3 text-sm text-muted-foreground">{getEntryKindLabel(entry)}</p>
+        <p class="mb-3 text-sm text-muted-foreground">{TOOL_TUTORIALS_LABEL}</p>
         <h1 class="text-3xl font-semibold tracking-normal text-foreground md:text-[2.5rem] md:leading-[1.15]">
           {entry.data.title}
         </h1>
@@ -105,59 +88,10 @@ const installGuides = guides
         </div>
       </header>
 
-      {
-        videoUrl && (
-          <section
-            class="mb-8 flex min-w-0 gap-3 border-y border-border py-4"
-            aria-labelledby="lesson-video-heading"
-          >
-            <Video className="mt-0.5 shrink-0 text-primary" aria-hidden="true" size={20} />
-            <div class="min-w-0">
-              <h2 id="lesson-video-heading" class="text-sm font-semibold text-foreground">
-                课程视频
-              </h2>
-              <a
-                class="mt-1 inline-flex max-w-full items-start gap-1.5 text-sm leading-6 text-primary underline underline-offset-4"
-                href={videoUrl}
-                target="_blank"
-                rel="noopener noreferrer external"
-                aria-label="打开课程视频"
-              >
-                <span class="break-all">{videoUrl}</span>
-                <ExternalLink className="mt-1 shrink-0" aria-hidden="true" size={14} />
-              </a>
-            </div>
-          </section>
-        )
-      }
-
       <div class="prose max-w-none">
         <slot />
       </div>
       <p class="sr-only" aria-live="polite" data-code-copy-status></p>
-
-      {
-        (adjacent.previous || adjacent.next) && (
-          <nav class="mt-12 grid gap-px border border-border bg-border md:grid-cols-2" aria-label="课程导航">
-            <div class="bg-background">
-              {adjacent.previous && (
-                <a class="block p-4 hover:bg-muted/50" href={getEntryUrl(adjacent.previous)}>
-                  <span class="text-xs text-muted-foreground">上一节</span>
-                  <p class="mt-2 font-medium">{adjacent.previous.data.title}</p>
-                </a>
-              )}
-            </div>
-            <div class="bg-background">
-              {adjacent.next && (
-                <a class="block p-4 text-right hover:bg-muted/50" href={getEntryUrl(adjacent.next)}>
-                  <span class="text-xs text-muted-foreground">下一节</span>
-                  <p class="mt-2 font-medium">{adjacent.next.data.title}</p>
-                </a>
-              )}
-            </div>
-          </nav>
-        )
-      }
 
       {
         related.length > 0 && (
@@ -166,7 +100,7 @@ const installGuides = guides
             <ul class="mt-4 divide-y divide-border border-y border-border">
               {related.slice(0, 3).map((item) => (
                 <li>
-                  <a class="flex items-center justify-between gap-4 py-4 hover:text-primary" href={getEntryUrl(item)}>
+                  <a class="flex items-center justify-between gap-4 py-4 hover:text-primary" href={getGuideUrl(item)}>
                     <span class="font-medium">{item.data.title}</span>
                     <span aria-hidden="true">→</span>
                   </a>

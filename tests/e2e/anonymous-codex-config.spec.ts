@@ -15,7 +15,7 @@ test("an anonymous Reader gets a provider-neutral install command by default", a
   await page.goto("/eggai/codex-installer/");
 
   const panel = page.getByRole("region", { name: "Codex 安装" });
-  await expect(panel.getByRole("tab", { name: "默认安装" })).toHaveAttribute(
+  await expect(panel.getByRole("tab", { name: "无配置安装" })).toHaveAttribute(
     "aria-selected",
     "true",
   );

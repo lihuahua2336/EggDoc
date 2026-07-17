@@ -216,9 +216,7 @@ export function EggAiCodexConfig() {
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
           language: DEFAULT_CODEX_LANGUAGE,
         });
-  const eggAiPreview = buildEggAiCommand(
-    selectedCredential ? "sk-REDACTED-EXPLICIT-COPY-ONLY" : CONFIGURATION_PLACEHOLDER,
-  );
+  const eggAiPreview = buildEggAiCommand(apiKey);
   const commandPreview = mode === "official" ? officialCommand : eggAiPreview;
   const commandCopyValue = mode === "official" ? officialCommand : buildEggAiCommand(apiKey);
 
@@ -323,6 +321,7 @@ export function EggAiCodexConfig() {
       aria-label="Codex 安装"
       className="not-prose my-7 overflow-hidden rounded-sm border border-border bg-background text-foreground"
       data-code-copy-ignore
+      data-configuration-placeholder={CONFIGURATION_PLACEHOLDER}
       id="codex-config"
     >
       <div className="border-b border-border px-4 pt-5 sm:px-6">
@@ -342,7 +341,7 @@ export function EggAiCodexConfig() {
             type="button"
           >
             <Download aria-hidden="true" className="h-4 w-4" />
-            默认安装
+            无配置安装
           </button>
           <button
             aria-controls="codex-install-panel"
