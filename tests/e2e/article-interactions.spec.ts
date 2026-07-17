@@ -42,9 +42,13 @@ for (const width of articleWidths) {
     );
   });
 
-  test(`the two tool tutorials fit ${width}px text layouts`, async ({ page }) => {
+  test(`the tool tutorials fit ${width}px text layouts`, async ({ page }) => {
     await page.setViewportSize({ height: 800, width });
-    for (const route of ["/eggai/codex-installer/", "/eggai/claude-code-install/"]) {
+    for (const route of [
+      "/eggai/codex-installer/",
+      "/eggai/codex-eggai-configuration/",
+      "/eggai/claude-code-install/",
+    ]) {
       await page.goto(route);
       expect(
         await page.evaluate(
@@ -54,3 +58,15 @@ for (const width of articleWidths) {
     }
   });
 }
+
+test("a Reader can continue from Codex installation to its EggAi configuration explanation", async ({
+  page,
+}) => {
+  await page.goto("/eggai/codex-installer/");
+  await page.getByRole("link", { name: "查看 Codex EggAi 配置说明" }).click();
+
+  await expect(page).toHaveURL(/\/eggai\/codex-eggai-configuration\/$/);
+  await expect(
+    page.getByRole("heading", { name: "Codex EggAi 配置说明", level: 1 }),
+  ).toBeVisible();
+});

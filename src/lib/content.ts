@@ -5,6 +5,7 @@ export type ContentEntry = GuideEntry;
 
 export const TOOL_TUTORIALS_PATH = "/eggai/";
 export const TOOL_TUTORIALS_LABEL = "工具教程";
+export const TOOL_TUTORIALS_DESCRIPTION = "Codex 与 Claude Code 的安装与配置教程。";
 
 function byOrderThenDate(a: GuideEntry, b: GuideEntry) {
   if (a.data.order !== b.data.order) {

@@ -1,5 +1,6 @@
 ---
 import Header from "@/components/layout/Header.astro";
+import { TOOL_TUTORIALS_DESCRIPTION } from "@/lib/content";
 import "@/styles/global.css";
 
 interface Props {
@@ -12,7 +13,7 @@ interface Props {
 
 const {
   title = "EggDoc",
-  description = "Codex 与 Claude Code 的快速安装教程。",
+  description = TOOL_TUTORIALS_DESCRIPTION,
   canonicalPath = Astro.url.pathname,
   image,
   type = "website",
