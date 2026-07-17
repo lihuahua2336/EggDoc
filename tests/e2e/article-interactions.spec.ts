@@ -51,6 +51,7 @@ for (const width of articleWidths) {
       "/eggai/codex-installer/",
       "/eggai/codex-eggai-configuration/",
       "/eggai/claude-code-install/",
+      "/eggai/claude-code-eggai-configuration/",
     ]) {
       await page.goto(route);
       expect(
@@ -62,14 +63,32 @@ for (const width of articleWidths) {
   });
 }
 
-test("a Reader can continue from Codex installation to its EggAi configuration explanation", async ({
-  page,
-}) => {
-  await page.goto("/eggai/codex-installer/");
-  await page.getByRole("link", { name: "查看 Codex EggAi 配置说明" }).click();
+for (const continuation of [
+  {
+    configurationRoute: "/eggai/codex-eggai-configuration/",
+    installRoute: "/eggai/codex-installer/",
+    product: "Codex",
+  },
+  {
+    configurationRoute: "/eggai/claude-code-eggai-configuration/",
+    installRoute: "/eggai/claude-code-install/",
+    product: "Claude Code",
+  },
+] as const) {
+  test(`a Reader can continue from ${continuation.product} installation to its EggAi configuration explanation`, async ({
+    page,
+  }) => {
+    await page.goto(continuation.installRoute);
+    await page
+      .getByRole("link", { name: `查看 ${continuation.product} EggAi 配置说明` })
+      .click();
 
-  await expect(page).toHaveURL(/\/eggai\/codex-eggai-configuration\/$/);
-  await expect(
-    page.getByRole("heading", { name: "Codex EggAi 配置说明", level: 1 }),
-  ).toBeVisible();
-});
+    await expect(page).toHaveURL(new RegExp(`${continuation.configurationRoute}$`));
+    await expect(
+      page.getByRole("heading", {
+        name: `${continuation.product} EggAi 配置说明`,
+        level: 1,
+      }),
+    ).toBeVisible();
+  });
+}

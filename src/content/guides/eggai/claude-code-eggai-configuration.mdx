@@ -1,0 +1,96 @@
+---
+type: guide
+title: Claude Code EggAi 配置说明
+description: 了解 EggAi 安装模式写入的 Claude Code 网关、API Key、模型映射和备份处理方式。
+publishedAt: 2026-07-17
+updatedAt: 2026-07-17
+tags: [claude-code, eggai, configuration]
+draft: false
+order: 40
+---
+
+使用安装页中的 `EggAi 配置` 后，脚本会把所选配置分组的 API 地址、真实 API Key 和 Claude 模型映射写入用户级 Claude Code 设置。
+
+## 配置文件
+
+默认配置文件是 `~/.claude/settings.json`。Windows 对应 `$HOME\.claude\settings.json`。
+
+| 文件 | 用途 |
+| --- | --- |
+| `settings.json` | 保存 EggAi 网关、API Key 和模型映射 |
+| `settings.json.eggai.bak` | 脚本写入前创建的原配置备份 |
+
+Claude Code 的 EggAi 配置不会创建 `auth.json`。API Key 直接保存在 `settings.json` 的 `env` 对象中。
+
+## settings.json
+
+默认生成的 EggAi 配置如下。实际 API 地址和 API Key 来自安装页中当前选择的 EggAi 配置分组。
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.eggai.icu",
+    "ANTHROPIC_AUTH_TOKEN": "sk-你的-EggAi-API-Key",
+    "ANTHROPIC_MODEL": "claude-sonnet-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-8",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-fable-5"
+  }
+}
+```
+
+- `ANTHROPIC_BASE_URL`：使用所选 EggAi 配置分组对应的 API 地址。脚本会删除地址末尾的 `/v1`，因为 Claude Code 会自行请求 `/v1/messages`。
+- `ANTHROPIC_AUTH_TOKEN`：保存所选配置分组的真实 API Key，并以 Bearer Token 方式访问 EggAi。
+- `ANTHROPIC_MODEL`：设置 Claude Code 的主模型。
+- `ANTHROPIC_DEFAULT_*_MODEL`：分别设置 Claude Code 各模型角色的默认模型。
+
+脚本会删除 `env` 中可能冲突的 `ANTHROPIC_API_KEY`，但会保留其他环境变量和所有无关设置。
+
+## 模型映射
+
+Claude Code 的静态配置保存一个主模型和各模型角色的默认值，不会把账户中的每个模型 ID 都写进 `settings.json`。
+
+| Claude Code 角色 | 默认 EggAi 模型 |
+| --- | --- |
+| 主模型 | `claude-sonnet-5` |
+| Sonnet | `claude-sonnet-5` |
+| Opus | `claude-opus-4-8` |
+| Fable | `claude-fable-5` |
+| Haiku | `claude-fable-5` |
+
+当前 EggAi 模型列表没有 Haiku，因此 Haiku 角色默认使用 `claude-fable-5`。`claude-opus-4-6` 和 `claude-sonnet-4-6` 是可用的较低版本，不会覆盖版本更高的默认模型。
+
+如果某个首选模型不在当前账户的模型列表中，安装页会选择该家族可用的最高版本；仍找不到时才回退到主模型。
+
+## 无需二次登录
+
+`ANTHROPIC_AUTH_TOKEN` 的认证优先级高于 Claude Code 已保存的 claude.ai 登录。只要这项 EggAi 配置仍然存在，启动 Claude Code 时就会直接使用所选 EggAi API Key，不需要再次登录 Claude。
+
+这不会删除原来的 claude.ai 登录信息。移除 EggAi 网关环境变量后，Claude Code 可以继续使用原来的登录状态。
+
+## 配置前验证
+
+写入设置前，脚本会使用所选 API 地址、API Key 和主模型发送一次流式工具调用请求。只有 EggAi 网关返回有效的 Anthropic Messages 流式响应后，脚本才会继续安装和修改配置。
+
+这项检查验证主模型、鉴权、流式响应和工具调用通路。其他模型角色依据 EggAi 返回的模型列表进行映射，不会在安装时分别发送请求。
+
+## 重复配置
+
+每次运行 EggAi 配置前，脚本都会读取并结构化合并现有 `settings.json`。如果文件已经存在，会先备份为 `settings.json.eggai.bak`，再更新由 EggDoc 管理的网关、认证和模型字段。
+
+除这些字段外，其他原有设置都会保留。重复运行会更新同一组字段，不会追加重复配置。
+
+API Key 会以明文保存在用户级配置文件、安装命令和终端历史中。不要分享 `settings.json`、备份文件、完整安装命令或包含 API Key 的截图。
+
+## 检查当前配置
+
+启动 Claude Code：
+
+```sh
+claude
+```
+
+进入 Claude Code 后运行 `/status`，检查当前 Base URL 和认证来源。
+
+[返回 Claude Code 安装](/eggai/claude-code-install/)
