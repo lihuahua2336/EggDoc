@@ -238,8 +238,8 @@ export function EggAiClaudeCodeConfig() {
             className="mt-3 text-xs leading-5 text-muted-foreground"
             data-testid="claude-code-model-summary"
           >
-            主模型 {claudeModels.main} · Opus {claudeModels.opus} · Fable / Haiku{" "}
-            {claudeModels.fable}
+            主模型 {claudeModels.main} · Opus {claudeModels.opus} · Fable {claudeModels.fable} ·
+            Haiku {claudeModels.haiku}
           </p>
         )}
       </div>

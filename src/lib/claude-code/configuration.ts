@@ -73,7 +73,7 @@ export function selectClaudeCodeModels(modelNames: string[]): ClaudeCodeModels |
   const sonnet = selectFamilyModel(modelNames, "sonnet", ["claude-sonnet-5"]);
   const opus = selectFamilyModel(modelNames, "opus", ["claude-opus-4-8"]);
   const fable = selectFamilyModel(modelNames, "fable", ["claude-fable-5"]);
-  const haiku = selectFamilyModel(modelNames, "haiku");
+  const haiku = selectFamilyModel(modelNames, "haiku", ["claude-haiku-4-5"]);
   const main = sonnet ?? opus ?? fable ?? haiku;
   if (!main) return undefined;
 

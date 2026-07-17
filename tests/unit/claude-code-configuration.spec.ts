@@ -26,7 +26,7 @@ test("EggAi commands safely quote the selected Claude Code credential and URL", 
       installerOrigin: "https://docs.example.test/root",
       models: {
         fable: "claude-fable-5",
-        haiku: "claude-fable-5",
+        haiku: "claude-haiku-4-5",
         main: "claude-sonnet-5",
         opus: "claude-opus-4-8",
         sonnet: "claude-sonnet-5",
@@ -36,7 +36,7 @@ test("EggAi commands safely quote the selected Claude Code credential and URL", 
     "curl -fsSL 'https://docs.example.test/root/install/claude-code.sh' | sh -s -- " +
       "--eggai --sk-key 'sk-reader'\"'\"'s-$HOME' --baseurl 'https://api.example.test' " +
       "--model 'claude-sonnet-5' --opus-model 'claude-opus-4-8' " +
-      "--sonnet-model 'claude-sonnet-5' --haiku-model 'claude-fable-5' " +
+      "--sonnet-model 'claude-sonnet-5' --haiku-model 'claude-haiku-4-5' " +
       "--fable-model 'claude-fable-5'",
   );
 
@@ -47,7 +47,7 @@ test("EggAi commands safely quote the selected Claude Code credential and URL", 
       installerOrigin: "https://docs.example.test/root's",
       models: {
         fable: "claude-fable-5",
-        haiku: "claude-fable-5",
+        haiku: "claude-haiku-4-5",
         main: "claude-sonnet-5",
         opus: "claude-opus-4-8",
         sonnet: "claude-sonnet-5",
@@ -57,7 +57,7 @@ test("EggAi commands safely quote the selected Claude Code credential and URL", 
     "& ([scriptblock]::Create((irm 'https://docs.example.test/root''s/install/claude-code.ps1'))) " +
       "-EggAi -SkKey 'sk-reader''s-$HOME; `exit`' -BaseUrl 'https://api.example.test' " +
       "-Model 'claude-sonnet-5' -OpusModel 'claude-opus-4-8' " +
-      "-SonnetModel 'claude-sonnet-5' -HaikuModel 'claude-fable-5' " +
+      "-SonnetModel 'claude-sonnet-5' -HaikuModel 'claude-haiku-4-5' " +
       "-FableModel 'claude-fable-5'",
   );
 });
@@ -69,12 +69,14 @@ test("Claude Code assigns the preferred EggAi model for each model role", () => 
       "claude-opus-4-6",
       "claude-sonnet-4-6",
       "claude-fable-5",
+      "claude-haiku-5",
+      "claude-haiku-4-5",
       "claude-opus-4-8",
       "claude-sonnet-5",
     ]),
   ).toEqual({
     fable: "claude-fable-5",
-    haiku: "claude-fable-5",
+    haiku: "claude-haiku-4-5",
     main: "claude-sonnet-5",
     opus: "claude-opus-4-8",
     sonnet: "claude-sonnet-5",

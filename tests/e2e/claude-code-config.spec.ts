@@ -75,10 +75,10 @@ test("Claude Code uses the first EggAi credential and can switch configuration g
     "--opus-model 'claude-opus-4-8'",
   );
   await expect(panel.getByTestId("claude-code-quick-command")).toContainText(
-    "--haiku-model 'claude-fable-5'",
+    "--haiku-model 'claude-haiku-4-5'",
   );
   await expect(panel.getByTestId("claude-code-model-summary")).toHaveText(
-    "主模型 claude-sonnet-5 · Opus claude-opus-4-8 · Fable / Haiku claude-fable-5",
+    "主模型 claude-sonnet-5 · Opus claude-opus-4-8 · Fable claude-fable-5 · Haiku claude-haiku-4-5",
   );
 
   await panel.getByRole("button", { name: "复制安装命令" }).click();
