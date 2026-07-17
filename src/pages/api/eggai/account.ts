@@ -56,6 +56,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       clearSession(cookies, url);
       return json({ state: "reauthorization-required" }, 401);
     }
+    if (configuration.kind === "inactive") {
+      return json({ activationUrl: config.eggAiPlatformUrl.href, state: "inactive" });
+    }
     if (configuration.kind === "temporary-error") {
       return json({ state: "temporary-error" }, 502);
     }

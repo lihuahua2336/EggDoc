@@ -16,9 +16,13 @@ test("an anonymous Reader starts a PKCE EggAi login with a safe source page", as
   expect(location.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
   expect(location.searchParams.get("state")).toMatch(/^[A-Za-z0-9_-]{32,}$/);
   expect(location.searchParams.get("nonce")).toMatch(/^[A-Za-z0-9_-]{32,}$/);
-  expect(location.searchParams.get("resource")).toBe("https://api.eggai.icu");
+  expect(location.searchParams.get("resource")).toBe("https://api.eggai.icu/api");
   expect(location.searchParams.get("scope")).toContain("openid");
   expect(location.searchParams.get("scope")).toContain("offline_access");
+  expect(location.searchParams.get("scope")).toContain("ecosystem:me");
+  expect(location.searchParams.get("scope")).toContain("ecosystem:models:read");
+  expect(location.searchParams.get("scope")).toContain("ecosystem:tokens:read");
+  expect(location.searchParams.get("prompt")).toBe("consent");
 
   const cookie = response.headers()["set-cookie"];
   expect(cookie).toContain("HttpOnly");

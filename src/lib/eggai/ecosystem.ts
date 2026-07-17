@@ -23,6 +23,7 @@ export type EggAiApiConfigurationResult =
       kind: "active";
       modelSummary: EggAiModelSummary;
     }
+  | { kind: "inactive" }
   | { kind: "authorization-expired" }
   | { kind: "temporary-error" };
 
@@ -38,6 +39,13 @@ export async function getEggAiApiAccount(
   const result = await requestEcosystem(ecosystemUrl, accessToken, "/api/ecosystem/me");
   if (result.kind === "not-found") return { kind: "inactive" };
   if (result.kind !== "success") return { kind: result.kind };
+  if (
+    !result.payload.data ||
+    typeof result.payload.data !== "object" ||
+    Array.isArray(result.payload.data)
+  ) {
+    return { kind: "temporary-error" };
+  }
   return { kind: "active" };
 }
 
@@ -57,6 +65,7 @@ export async function getEggAiApiConfiguration(
     }
     return { kind: "temporary-error" };
   }
+  if (tokens.data.length === 0) return { kind: "inactive" };
 
   const modelNames = models.data.map(parseModelName);
   const credentials = tokens.data.map((token) => parseCredential(token, fallbackBaseUrl));
@@ -126,11 +135,16 @@ function parseModelName(value: unknown) {
 
 function parseCredential(value: unknown, fallbackBaseUrl: string): EggAiApiCredential | null {
   if (!value || typeof value !== "object") return null;
-  if (!("id" in value) || !("key" in value) || !("name" in value) || !("group" in value)) {
+  if (
+    !("token_id" in value) ||
+    !("api_key" in value) ||
+    !("token_name" in value) ||
+    !("group" in value)
+  ) {
     return null;
   }
 
-  const { group, id, key, name } = value;
+  const { api_key: key, group, token_id: id, token_name: name } = value;
   if (
     !((typeof id === "string" && id.length > 0) || (typeof id === "number" && Number.isFinite(id))) ||
     typeof key !== "string" ||

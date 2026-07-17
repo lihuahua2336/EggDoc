@@ -12,26 +12,22 @@ const stats = { globalLogoutCount: 0, refreshGrantCount: 0 };
 const ecosystem = { accountRequestCount: 0, mode: "active" };
 
 const singleCredential = {
+  api_key: "sk-EGGDOC-SINGLE-FIXTURE-ONLY",
   base_url: "https://api.fixture.eggai.test/v1",
   group: "default",
-  id: 101,
-  key: "sk-EGGDOC-SINGLE-FIXTURE-ONLY",
-  name: "Codex primary",
+  token_id: 101,
+  token_name: "Codex primary",
 };
 
 const secondaryCredential = {
+  api_key: "sk-EGGDOC-SECONDARY-FIXTURE-ONLY",
   base_url: "https://edge.fixture.eggai.test/v1",
   group: "coding",
-  id: 202,
-  key: "sk-EGGDOC-SECONDARY-FIXTURE-ONLY",
-  name: "Codex secondary",
+  token_id: 202,
+  token_name: "Codex secondary",
 };
 
-const availableModels = [
-  { id: "gpt-5.2" },
-  { id: "claude-sonnet-4-5" },
-  { id: "gemini-3-pro" },
-];
+const availableModels = ["gpt-5.2", "claude-sonnet-4-5", "gemini-3-pro"];
 
 function redirect(response, location) {
   response.writeHead(302, { location });
@@ -117,11 +113,6 @@ const server = createServer((request, response) => {
       response.end(JSON.stringify({ success: false, message: "fixture bearer token rejected" }));
       return;
     }
-    if (ecosystem.mode === "inactive") {
-      response.writeHead(404, { "content-type": "application/json" });
-      response.end(JSON.stringify({ success: false, message: "fixture account does not exist" }));
-      return;
-    }
     if (ecosystem.mode === "authorization-expired") {
       response.writeHead(401, { "content-type": "application/json" });
       response.end(JSON.stringify({ success: false, message: "fixture upstream authorization detail" }));
@@ -171,20 +162,24 @@ const server = createServer((request, response) => {
         ? [singleCredential, secondaryCredential]
         : [singleCredential];
     const body =
-      ecosystem.mode === "malformed-tokens"
-        ? {
-            success: true,
-            data: [
-              {
-                id: 303,
-                key: "sk-EGGDOC-MALFORMED-FIXTURE-ONLY",
-                name: null,
-              },
-            ],
-          }
-        : ecosystem.mode === "malformed-token-envelope"
-          ? { data: credentials }
-          : { success: true, data: credentials };
+      ecosystem.mode === "inactive"
+        ? { success: true, data: [] }
+        : ecosystem.mode === "malformed-tokens"
+          ? {
+              success: true,
+              data: [
+                {
+                  api_key: "sk-EGGDOC-MALFORMED-FIXTURE-ONLY",
+                  base_url: "https://api.fixture.eggai.test/v1",
+                  group: "default",
+                  token_id: 303,
+                  token_name: null,
+                },
+              ],
+            }
+          : ecosystem.mode === "malformed-token-envelope"
+            ? { data: credentials }
+            : { success: true, data: credentials };
     response.end(JSON.stringify(body));
     return;
   }
@@ -203,7 +198,14 @@ const server = createServer((request, response) => {
         subject_types_supported: ["public"],
         id_token_signing_alg_values_supported: ["RS256"],
         token_endpoint_auth_methods_supported: ["client_secret_post"],
-        scopes_supported: ["openid", "profile", "offline_access", "read:ecosystem"],
+        scopes_supported: [
+          "openid",
+          "profile",
+          "offline_access",
+          "ecosystem:me",
+          "ecosystem:models:read",
+          "ecosystem:tokens:read",
+        ],
         code_challenge_methods_supported: ["S256"],
       }),
     );

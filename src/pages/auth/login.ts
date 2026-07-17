@@ -23,6 +23,9 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
     session.pending = { codeVerifier, createdAt: now, nonce, returnTo, state };
     await writeSession(cookies, url, session, config.sessionSecret);
 
+    const requiresConsent =
+      config.scopes.split(/\s+/).includes("offline_access") ||
+      url.searchParams.get("reauthorize") === "1";
     const authorizationUrl = oidc.buildAuthorizationUrl(oidcConfig, {
       client_id: config.clientId,
       code_challenge: await oidc.calculatePKCECodeChallenge(codeVerifier),
@@ -33,7 +36,7 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
       response_type: "code",
       scope: config.scopes,
       state,
-      ...(url.searchParams.get("reauthorize") === "1" ? { prompt: "consent" } : {}),
+      ...(requiresConsent ? { prompt: "consent" } : {}),
     });
     return redirectNoStore(authorizationUrl.href);
   } catch {
