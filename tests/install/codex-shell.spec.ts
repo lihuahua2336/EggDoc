@@ -36,10 +36,21 @@ test("the hosted Shell installer has valid POSIX shell syntax", () => {
   expect(result.status).toBe(0);
 });
 
-test("dry-run accepts generated parameters, redacts the key, and previews provider config", () => {
+test("default dry-run installs Codex without changing provider configuration", () => {
+  const result = runShell(["--dry-run"]);
+
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("Mode: default");
+  expect(result.stdout).toContain("Would install/update Codex: yes");
+  expect(result.stdout).toContain("Would write config.toml: no");
+  expect(result.stdout).toContain("Would run codex login --with-api-key: no");
+  expect(result.stdout).not.toContain("model_provider");
+});
+
+test("EggAi dry-run accepts generated parameters, redacts the key, and previews provider config", () => {
   const fixtureKey = "sk-EGGDOC-SHELL-DRY-RUN-ONLY";
   const result = runShell([
-    "--dry-run",
+    "--dry-run", "--eggai",
     "--sk-key",
     fixtureKey,
     "--baseurl",
@@ -50,7 +61,7 @@ test("dry-run accepts generated parameters, redacts the key, and previews provid
 
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
-  expect(result.stdout).toContain("Mode: dry-run");
+  expect(result.stdout).toContain("Mode: eggai");
   expect(result.stdout).toContain("API key: provided (redacted)");
   expect(result.stdout).not.toContain(fixtureKey);
   expect(result.stdout).toContain('base_url = "https://api.example.test/v1?label=\\"shell\\""');
@@ -60,8 +71,8 @@ test("dry-run accepts generated parameters, redacts the key, and previews provid
   expect(result.stdout).toContain("Backup file: /tmp/eggdoc-codex-shell-test/config.toml.eggai.bak");
 });
 
-test("dry-run keeps zh-cn and the public EggAi Base URL as stable defaults", () => {
-  const result = runShell(["--dry-run"]);
+test("EggAi dry-run keeps zh-cn and the public EggAi Base URL as stable defaults", () => {
+  const result = runShell(["--dry-run", "--eggai"]);
 
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Base URL: https://api.eggai.icu/v1");
@@ -70,9 +81,9 @@ test("dry-run keeps zh-cn and the public EggAi Base URL as stable defaults", () 
   expect(result.stdout).toContain("请默认使用简体中文回答");
 });
 
-test("dry-run rejects invalid language and Base URL before any install path", () => {
-  const invalidLanguage = runShell(["--dry-run", "--language", "fr-fr"]);
-  const invalidBaseUrl = runShell(["--dry-run", "--baseurl", "file:///tmp/eggai"]);
+test("EggAi dry-run rejects invalid language and Base URL before any install path", () => {
+  const invalidLanguage = runShell(["--dry-run", "--eggai", "--language", "fr-fr"]);
+  const invalidBaseUrl = runShell(["--dry-run", "--eggai", "--baseurl", "file:///tmp/eggai"]);
 
   expect(invalidLanguage.status).not.toBe(0);
   expect(invalidLanguage.stderr).toContain("language must be zh-cn or en-us");

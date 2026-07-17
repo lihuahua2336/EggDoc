@@ -51,7 +51,7 @@ test("EggAi login returns a Reader to the source tutorial anchor", async ({ page
 
   await expect(page).toHaveURL(/\/eggai\/codex-installer\/#codex-config$/);
   expect(new URL(page.url()).hash).toBe("#codex-config");
-  await expect(page.getByRole("heading", { name: "用脚本把 Codex 接入 EggAi" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Codex 安装", level: 1 })).toBeVisible();
   await expect(page.getByText("测试读者", { exact: true })).toBeVisible();
 });
 
@@ -63,7 +63,7 @@ test("EggAi cancellation returns to public content with a local error", async ({
   expect(returnedUrl.pathname).toBe("/eggai/codex-installer/");
   expect(returnedUrl.searchParams.get("auth_error")).toBe("cancelled");
   expect(returnedUrl.hash).toBe("#codex-config");
-  await expect(page.getByRole("heading", { name: "用脚本把 Codex 接入 EggAi" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Codex 安装", level: 1 })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("登录已取消");
   await expect(page.getByText("fixture cancellation details")).toHaveCount(0);
 });
@@ -88,7 +88,8 @@ test("header and tutorial login actions preserve their public source pages", asy
   await expect(page.getByRole("heading", { name: "EggAi 测试登录" })).toBeVisible();
 
   await page.goto("/eggai/codex-installer/");
-  const panel = page.getByRole("region", { name: "Codex 匿名配置" });
+  const panel = page.getByRole("region", { name: "Codex 安装" });
+  await panel.getByRole("tab", { name: "EggAi 配置" }).click();
   await expect(panel.getByRole("link", { name: "登录 EggAi" })).toHaveAttribute(
     "href",
     "/auth/login?returnTo=%2Feggai%2Fcodex-installer%2F%23codex-config",
@@ -105,7 +106,7 @@ test("the encrypted EggDoc Session refreshes authorization and exposes only curr
   await request.post("http://127.0.0.1:4323/control/reset");
   await page.goto("/auth/login?returnTo=%2Fnotes%2F");
   await page.getByRole("button", { name: "继续登录" }).click();
-  await expect(page).toHaveURL("http://127.0.0.1:4322/notes/");
+  await expect(page).toHaveURL(/\/notes\/$/);
 
   const sessionCookie = (await context.cookies()).find((cookie) => cookie.name === "eggdoc_session");
   expect(sessionCookie).toBeDefined();

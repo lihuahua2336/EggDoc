@@ -2,10 +2,24 @@ export const CODEX_LANGUAGES = ["zh-cn", "en-us"] as const;
 
 export type CodexLanguage = (typeof CODEX_LANGUAGES)[number];
 
+function installerUrl(installerOrigin: string, filename: "codex.ps1" | "codex.sh") {
+  return `${installerOrigin.replace(/\/$/, "")}/install/${filename}`;
+}
+
 const developerInstructions: Record<CodexLanguage, string> = {
   "en-us": "Respond in English by default unless the user explicitly asks for another language.",
   "zh-cn": "请默认使用简体中文回答，除非用户明确要求其他语言。",
 };
+
+export function buildShellDefaultInstallCommand(installerOrigin: string) {
+  const scriptUrl = installerUrl(installerOrigin, "codex.sh");
+  return `curl -fsSL ${quoteShellArgument(scriptUrl)} | sh`;
+}
+
+export function buildPowerShellDefaultInstallCommand(installerOrigin: string) {
+  const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
+  return `irm ${quotePowerShellArgument(scriptUrl)} | iex`;
+}
 
 export function buildShellInstallCommand({
   apiKey,
@@ -18,10 +32,11 @@ export function buildShellInstallCommand({
   installerOrigin: string;
   language: CodexLanguage;
 }) {
-  const scriptUrl = `${installerOrigin.replace(/\/$/, "")}/install/codex.sh`;
+  const scriptUrl = installerUrl(installerOrigin, "codex.sh");
 
   return (
     `curl -fsSL ${quoteShellArgument(scriptUrl)} | sh -s -- ` +
+    "--eggai " +
     `--sk-key ${quoteShellArgument(apiKey)} ` +
     `--baseurl ${quoteShellArgument(baseUrl)} ` +
     `--language ${quoteShellArgument(language)}`
@@ -39,13 +54,13 @@ export function buildPowerShellInstallCommand({
   installerOrigin: string;
   language: CodexLanguage;
 }) {
-  const scriptUrl = `${installerOrigin.replace(/\/$/, "")}/install/codex.ps1`;
+  const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
 
   return (
-    `$env:SK_KEY = ${quotePowerShellArgument(apiKey)}; ` +
-    `$env:BASE_URL = ${quotePowerShellArgument(baseUrl)}; ` +
-    `$env:LANGUAGE = ${quotePowerShellArgument(language)}; ` +
-    `irm ${quotePowerShellArgument(scriptUrl)} | iex`
+    `& ([scriptblock]::Create((irm ${quotePowerShellArgument(scriptUrl)}))) ` +
+    `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} ` +
+    `-BaseUrl ${quotePowerShellArgument(baseUrl)} ` +
+    `-Language ${quotePowerShellArgument(language)}`
   );
 }
 

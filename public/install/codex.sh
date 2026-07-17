@@ -6,6 +6,7 @@ BASE_URL="${BASE_URL:-$DEFAULT_BASE_URL}"
 SK_KEY="${SK_KEY:-${EGGAI_API_KEY:-}}"
 LANGUAGE="${LANGUAGE:-zh-cn}"
 DRY_RUN="${DRY_RUN:-0}"
+EGGAI_MODE=0
 OFFICIAL_INSTALLER_URL="${CODEX_INSTALLER_URL:-https://chatgpt.com/codex/install.sh}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 CONFIG_FILE="$CODEX_HOME/config.toml"
@@ -13,10 +14,12 @@ CONFIG_FILE="$CODEX_HOME/config.toml"
 usage() {
   cat <<'EOF'
 Usage:
-  curl -fsSL https://eggdoc.pages.dev/install/codex.sh | sh -s -- --sk-key sk-...
+  curl -fsSL https://eggdoc.pages.dev/install/codex.sh | sh
+  curl -fsSL https://eggdoc.pages.dev/install/codex.sh | sh -s -- --eggai --sk-key sk-...
 
 Options:
-  --sk-key <key>       Required. EggAi API key.
+  --eggai              Configure Codex to use EggAi after installation.
+  --sk-key <key>       Required with --eggai. EggAi API key.
   --baseurl <url>      Optional. Default: https://api.eggai.icu/v1
   --language <value>   Optional. zh-cn or en-us. Default: zh-cn
   --dry-run            Check what would happen without installing or writing files.
@@ -29,6 +32,10 @@ EOF
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --eggai)
+      EGGAI_MODE=1
+      shift
+      ;;
     --sk-key|--sk_key|-k)
       SK_KEY="${2:-}"
       shift 2
@@ -62,7 +69,8 @@ say() {
     install) echo "Installing or updating Codex..." ;;
     config) echo "Writing EggAi Codex configuration..." ;;
     login) echo "Writing Codex API key login cache..." ;;
-    done) echo "Done: Codex is configured to use EggAi." ;;
+    done) echo "Done: Codex is installed." ;;
+    eggai_done) echo "Done: Codex is installed and configured to use EggAi." ;;
     *) echo "$1" ;;
   esac
 }
@@ -72,21 +80,29 @@ fail() {
   exit 1
 }
 
-case "$LANGUAGE" in
-  zh-cn|en-us) ;;
-  *) fail "language must be zh-cn or en-us." ;;
-esac
-
-case "$BASE_URL" in
-  http://*|https://*) ;;
-  *) fail "baseurl must start with http:// or https://." ;;
-esac
-
 case "$DRY_RUN" in
   1|true|TRUE|yes|YES) DRY_RUN=1 ;;
   0|false|FALSE|no|NO) DRY_RUN=0 ;;
   *) fail "DRY_RUN must be 1 or 0." ;;
 esac
+
+case "$EGGAI_MODE" in
+  1|true|TRUE|yes|YES) EGGAI_MODE=1 ;;
+  0|false|FALSE|no|NO) EGGAI_MODE=0 ;;
+  *) fail "EGGAI_MODE must be 1 or 0." ;;
+esac
+
+if [ "$EGGAI_MODE" = "1" ]; then
+  case "$LANGUAGE" in
+    zh-cn|en-us) ;;
+    *) fail "language must be zh-cn or en-us." ;;
+  esac
+
+  case "$BASE_URL" in
+    http://*|https://*) ;;
+    *) fail "baseurl must start with http:// or https://." ;;
+  esac
+fi
 
 toml_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -101,22 +117,29 @@ developer_instructions() {
 }
 
 print_plan() {
+  echo "Codex installer dry run"
+  echo "Mode: $([ "$EGGAI_MODE" = "1" ] && echo eggai || echo default)"
+  echo "Installer URL: $OFFICIAL_INSTALLER_URL"
+  echo "Codex home: $CODEX_HOME"
+  echo "Would install/update Codex: yes"
+
+  if [ "$EGGAI_MODE" = "0" ]; then
+    echo "Would write config.toml: no"
+    echo "Would run codex login --with-api-key: no"
+    return
+  fi
+
   if [ -n "$SK_KEY" ]; then
     api_key_status="provided (redacted)"
   else
     api_key_status="missing"
   fi
 
-  echo "EggAi Codex installer dry run"
-  echo "Mode: dry-run"
-  echo "Installer URL: $OFFICIAL_INSTALLER_URL"
-  echo "Codex home: $CODEX_HOME"
   echo "Config file: $CONFIG_FILE"
   echo "Backup file: $CONFIG_FILE.eggai.bak"
   echo "Base URL: $BASE_URL"
   echo "Language: $LANGUAGE"
   echo "API key: $api_key_status"
-  echo "Would install/update Codex: yes"
   echo "Would write config.toml: yes"
   echo "Would run codex login --with-api-key: yes"
   echo "Managed config preview:"
@@ -139,7 +162,9 @@ if [ "$DRY_RUN" = "1" ]; then
   exit 0
 fi
 
-[ -n "$SK_KEY" ] || fail "sk-key is required. Pass --sk-key or set SK_KEY."
+if [ "$EGGAI_MODE" = "1" ]; then
+  [ -n "$SK_KEY" ] || fail "sk-key is required with --eggai. Pass --sk-key or set SK_KEY."
+fi
 
 command -v curl >/dev/null 2>&1 || fail "curl is required."
 
@@ -147,6 +172,11 @@ say install
 CODEX_NON_INTERACTIVE="${CODEX_NON_INTERACTIVE:-1}"
 export CODEX_NON_INTERACTIVE
 curl -fsSL "$OFFICIAL_INSTALLER_URL" | sh
+
+if [ "$EGGAI_MODE" = "0" ]; then
+  say done
+  exit 0
+fi
 
 if ! command -v codex >/dev/null 2>&1; then
   if [ -x "$CODEX_HOME/bin/codex" ]; then
@@ -230,6 +260,6 @@ say login
 printf '%s' "$SK_KEY" | codex login --with-api-key >/dev/null
 codex login status >/dev/null 2>&1 || fail "Codex login did not complete successfully."
 
-say done
+say eggai_done
 echo "Config: $CONFIG_FILE"
 echo "Backup: $BACKUP_FILE"

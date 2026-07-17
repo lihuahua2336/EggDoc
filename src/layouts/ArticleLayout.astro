@@ -1,11 +1,11 @@
 ---
-import { Badge } from "@/components/ui/badge";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { ExternalLink, Video } from "lucide-react";
+import { Check, Copy, ExternalLink, Video } from "lucide-react";
 import {
   formatDate,
   getEntryKindLabel,
   getEntryUrl,
+  getPublishedGuides,
   type AdjacentEntries,
   type ContentEntry,
 } from "@/lib/content";
@@ -27,6 +27,11 @@ const { entry, headings = [], adjacent = {}, related = [] } = Astro.props;
 const toc = headings.filter((heading) => heading.depth >= 2 && heading.depth <= 3);
 const canonicalPath = getEntryUrl(entry);
 const videoUrl = entry.collection === "lessons" ? entry.data.videoUrl : undefined;
+const guides = await getPublishedGuides();
+const isInstallGuide = entry.collection === "guides" && entry.data.tags.includes("install");
+const installGuides = guides
+  .filter((guide) => guide.data.service === "eggai" && guide.data.tags.includes("install"))
+  .sort((a, b) => a.data.order - b.data.order);
 ---
 
 <BaseLayout
@@ -35,32 +40,71 @@ const videoUrl = entry.collection === "lessons" ? entry.data.videoUrl : undefine
   canonicalPath={canonicalPath}
   type="article"
 >
-  <main class="mx-auto grid max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_16rem]">
-    <article class="min-w-0" data-pagefind-body>
-      <nav class="mb-8 text-sm text-muted-foreground">
-        <a href="/" class="hover:text-foreground">首页</a>
-        <span class="mx-2">/</span>
-        <span>{entry.data.title}</span>
+  <div class="border-b border-border bg-muted/35">
+    <div class="mx-auto flex h-10 max-w-[90rem] items-center gap-2 px-4 text-sm text-muted-foreground sm:px-6">
+      <a href="/" class="hover:text-foreground">EggDoc</a>
+      <span aria-hidden="true">/</span>
+      <a href={entry.collection === "guides" ? "/eggai/" : "/learn/"} class="hover:text-foreground">
+        {getEntryKindLabel(entry)}
+      </a>
+      <span aria-hidden="true">/</span>
+      <span class="truncate text-foreground">{entry.data.title}</span>
+    </div>
+  </div>
+
+  <main class="mx-auto grid max-w-[90rem] grid-cols-1 lg:grid-cols-[15rem_minmax(0,46rem)] xl:grid-cols-[15rem_minmax(0,46rem)_13rem]">
+    <aside class="hidden border-r border-border lg:block" aria-label="文档导航">
+      <nav class="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto px-5 py-8">
+        <a class="block text-sm font-semibold text-foreground" href={isInstallGuide ? "/eggai/" : "/"}>
+          {isInstallGuide ? "AI 编程工具" : "EggDoc 文档"}
+        </a>
+        {isInstallGuide ? (
+          <>
+            <p class="mt-6 text-xs font-semibold text-muted-foreground">安装</p>
+            <ul class="mt-2 space-y-1 text-sm">
+              {installGuides.map((guide) => (
+                <li>
+                  <a
+                    aria-current={getEntryUrl(guide) === canonicalPath ? "page" : undefined}
+                    class:list={[
+                      "block border-l-2 py-2 pl-3 leading-5 transition-colors",
+                      getEntryUrl(guide) === canonicalPath
+                        ? "border-primary font-semibold text-primary"
+                        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+                    ]}
+                    href={getEntryUrl(guide)}
+                  >
+                    {guide.data.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <ul class="mt-5 space-y-1 text-sm text-muted-foreground">
+            <li>
+              <a class="block py-2 hover:text-foreground" href="/learn/">AI 编程</a>
+            </li>
+            <li><a class="block py-2 hover:text-foreground" href="/notes/">工具与概念</a></li>
+          </ul>
+        )}
       </nav>
-      <header class="mb-8 border-b border-border pb-8">
-        <div class="mb-4 flex flex-wrap gap-2">
-          {entry.data.tags.map((tag) => (
-            <a href={`/tags/${tag}/`}>
-              <Badge variant="outline">{tag}</Badge>
-            </a>
-          ))}
-        </div>
-        <h1 class="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
+    </aside>
+
+    <article class="min-w-0 px-4 py-8 sm:px-8 lg:px-10 lg:py-10" data-pagefind-body>
+      <header class="mb-8 border-b border-border pb-7">
+        <p class="mb-3 text-sm text-muted-foreground">{getEntryKindLabel(entry)}</p>
+        <h1 class="text-3xl font-semibold tracking-normal text-foreground md:text-[2.5rem] md:leading-[1.15]">
           {entry.data.title}
         </h1>
-        <p class="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">
+        <p class="mt-4 max-w-3xl text-base leading-7 text-muted-foreground md:text-lg">
           {entry.data.description}
         </p>
-        <div class="mt-5 flex flex-wrap gap-4 text-sm text-muted-foreground">
-          <span>发布于 {formatDate(entry.data.publishedAt)}</span>
+        <div class="mt-5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
           <span>更新于 {formatDate(entry.data.updatedAt)}</span>
         </div>
       </header>
+
       {
         videoUrl && (
           <section
@@ -80,40 +124,32 @@ const videoUrl = entry.collection === "lessons" ? entry.data.videoUrl : undefine
                 aria-label="打开课程视频"
               >
                 <span class="break-all">{videoUrl}</span>
-                <ExternalLink
-                  className="mt-1 shrink-0"
-                  aria-hidden="true"
-                  size={14}
-                />
+                <ExternalLink className="mt-1 shrink-0" aria-hidden="true" size={14} />
               </a>
             </div>
           </section>
         )
       }
+
       <div class="prose max-w-none">
         <slot />
       </div>
       <p class="sr-only" aria-live="polite" data-code-copy-status></p>
+
       {
         (adjacent.previous || adjacent.next) && (
-          <nav class="mt-12 grid gap-4 border-t border-border pt-8 md:grid-cols-2" aria-label="课程导航">
-            <div>
+          <nav class="mt-12 grid gap-px border border-border bg-border md:grid-cols-2" aria-label="课程导航">
+            <div class="bg-background">
               {adjacent.previous && (
-                <a
-                  class="block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/50"
-                  href={getEntryUrl(adjacent.previous)}
-                >
+                <a class="block p-4 hover:bg-muted/50" href={getEntryUrl(adjacent.previous)}>
                   <span class="text-xs text-muted-foreground">上一节</span>
                   <p class="mt-2 font-medium">{adjacent.previous.data.title}</p>
                 </a>
               )}
             </div>
-            <div>
+            <div class="bg-background">
               {adjacent.next && (
-                <a
-                  class="block rounded-lg border border-border bg-card p-4 text-right transition-colors hover:border-primary/50"
-                  href={getEntryUrl(adjacent.next)}
-                >
+                <a class="block p-4 text-right hover:bg-muted/50" href={getEntryUrl(adjacent.next)}>
                   <span class="text-xs text-muted-foreground">下一节</span>
                   <p class="mt-2 font-medium">{adjacent.next.data.title}</p>
                 </a>
@@ -122,79 +158,90 @@ const videoUrl = entry.collection === "lessons" ? entry.data.videoUrl : undefine
           </nav>
         )
       }
+
       {
         related.length > 0 && (
           <section class="mt-12 border-t border-border pt-8">
             <h2 class="text-xl font-semibold">继续阅读</h2>
-            <div class="mt-4 grid gap-4 md:grid-cols-3">
-              {related.map((item) => (
-                <a
-                  class="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/50"
-                  href={getEntryUrl(item)}
-                >
-                  <span class="text-xs text-muted-foreground">{getEntryKindLabel(item)}</span>
-                  <p class="mt-2 font-medium leading-6">{item.data.title}</p>
-                  <p class="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">
-                    {item.data.description}
-                  </p>
-                </a>
+            <ul class="mt-4 divide-y divide-border border-y border-border">
+              {related.slice(0, 3).map((item) => (
+                <li>
+                  <a class="flex items-center justify-between gap-4 py-4 hover:text-primary" href={getEntryUrl(item)}>
+                    <span class="font-medium">{item.data.title}</span>
+                    <span aria-hidden="true">→</span>
+                  </a>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         )
       }
+
+      <footer class="mt-10 flex flex-wrap gap-2 border-t border-border pt-6 text-xs text-muted-foreground">
+        {entry.data.tags.map((tag) => <a class="hover:text-primary" href={`/tags/${tag}/`}>#{tag}</a>)}
+      </footer>
     </article>
-    <aside class="hidden lg:block">
-      <div class="sticky top-24 space-y-4">
-        {
-          toc.length > 0 && (
-            <nav class="rounded-lg border border-border bg-card p-4" aria-label="文章目录">
-              <p class="text-sm font-medium">目录</p>
-              <ol class="mt-3 space-y-2 text-sm text-muted-foreground">
-                {toc.map((heading) => (
-                  <li class={heading.depth === 3 ? "pl-3" : ""}>
-                    <a class="hover:text-foreground" href={`#${heading.slug}`}>
-                      {heading.text}
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            </nav>
-          )
-        }
-        <div class="rounded-lg border border-border bg-card p-4">
-          <p class="text-sm font-medium">本文信息</p>
-          <dl class="mt-4 space-y-3 text-sm text-muted-foreground">
-            <div>
-              <dt class="text-xs uppercase tracking-wide">类型</dt>
-              <dd class="mt-1">{getEntryKindLabel(entry)}</dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase tracking-wide">标签</dt>
-              <dd class="mt-1">{entry.data.tags.join(", ")}</dd>
-            </div>
-          </dl>
-        </div>
+
+    <aside class="hidden xl:block">
+      <div class="sticky top-14 px-5 py-10">
+        {toc.length > 0 && (
+          <nav class="border-l border-border pl-4" aria-label="本文内容">
+            <p class="text-sm font-semibold">本文内容</p>
+            <ol class="mt-3 space-y-2.5 text-sm text-muted-foreground">
+              {toc.map((heading) => (
+                <li class={heading.depth === 3 ? "pl-3" : ""}>
+                  <a class="block leading-5 hover:text-foreground" href={`#${heading.slug}`}>
+                    {heading.text}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )}
       </div>
     </aside>
   </main>
 </BaseLayout>
 
+<template data-copy-icon><Copy aria-hidden="true" size={15} /></template>
+<template data-check-icon><Check aria-hidden="true" size={15} /></template>
+
 <script>
   const resetTimers = new WeakMap<HTMLButtonElement, number>();
+  const languageNames: Record<string, string> = {
+    bash: "Bash",
+    powershell: "PowerShell",
+    sh: "Shell",
+    shell: "Shell",
+    text: "Text",
+    toml: "TOML",
+    txt: "Text",
+  };
+
+  function setCopyButton(button: HTMLButtonElement, label: string, copied: boolean) {
+    const template = document.querySelector<HTMLTemplateElement>(
+      copied ? "template[data-check-icon]" : "template[data-copy-icon]",
+    );
+    button.replaceChildren(template?.content.cloneNode(true) ?? "");
+    const text = document.createElement("span");
+    text.textContent = label;
+    button.append(text);
+    button.setAttribute(
+      "aria-label",
+      label === "已复制" ? "代码已复制" : label === "复制失败" ? label : "复制代码",
+    );
+  }
 
   function announceCopyResult(button: HTMLButtonElement, label: string, message: string) {
     const status = document.querySelector<HTMLElement>("[data-code-copy-status]");
-    button.textContent = label;
+    setCopyButton(button, label, label === "已复制");
     status?.replaceChildren(message);
 
     const previousTimer = resetTimers.get(button);
     if (previousTimer) window.clearTimeout(previousTimer);
     resetTimers.set(
       button,
-      window.setTimeout(() => {
-        button.textContent = "复制代码";
-      }, 2_000),
+      window.setTimeout(() => setCopyButton(button, "复制", false), 2_000),
     );
   }
 
@@ -206,22 +253,31 @@ const videoUrl = entry.collection === "lessons" ? entry.data.videoUrl : undefine
       const code = codeBlock.querySelector<HTMLElement>("code");
       if (!code) return;
 
+      const toolbar = document.createElement("div");
+      toolbar.className = "code-toolbar";
+      const language = [...code.classList]
+        .find((className) => className.startsWith("language-"))
+        ?.replace("language-", "");
+      const label = document.createElement("span");
+      label.textContent = languageNames[language ?? ""] ?? "Code";
+
       const button = document.createElement("button");
       button.type = "button";
       button.className = "code-copy-button";
-      button.textContent = "复制代码";
+      setCopyButton(button, "复制", false);
       button.addEventListener("click", async () => {
         try {
           if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
           await navigator.clipboard.writeText(code.textContent ?? "");
-          announceCopyResult(button, "代码已复制", "代码已复制到剪贴板。");
+          announceCopyResult(button, "已复制", "代码已复制到剪贴板。");
         } catch {
           announceCopyResult(button, "复制失败", "复制代码失败，请手动选择代码。");
         }
       });
 
+      toolbar.append(label, button);
       codeBlock.dataset.copyEnhanced = "true";
-      codeBlock.append(button);
+      codeBlock.prepend(toolbar);
     });
   }
 

@@ -81,11 +81,22 @@ test("the hosted PowerShell installer and generated command have valid PowerShel
   expect(commandSyntax.status).toBe(0);
 });
 
-test("dry-run accepts generated values, redacts the key, and never creates CODEX_HOME", () => {
+test("default dry-run installs Codex without changing provider configuration", () => {
+  const codexHome = unusedCodexHome();
+  const result = runPowerShell(["-File", scriptPath, "-DryRun"], codexHome);
+
+  expect(existsSync(codexHome)).toBe(false);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("Mode: default");
+  expect(result.stdout).toContain("Would write config.toml: no");
+  expect(result.stdout).toContain("Would run codex login --with-api-key: no");
+});
+
+test("EggAi dry-run accepts generated values, redacts the key, and never creates CODEX_HOME", () => {
   const fixtureKey = "sk-EGGDOC-POWERSHELL-DRY-RUN-ONLY";
   const codexHome = unusedCodexHome();
   const result = runPowerShell(
-    ["-File", scriptPath, "-DryRun"],
+    ["-File", scriptPath, "-DryRun", "-EggAi"],
     codexHome,
     {
       BASE_URL: 'https://api.example.test/v1?label="powershell"',
@@ -97,7 +108,7 @@ test("dry-run accepts generated values, redacts the key, and never creates CODEX
   expect(existsSync(codexHome)).toBe(false);
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
-  expect(result.stdout).toContain("Mode: dry-run");
+  expect(result.stdout).toContain("Mode: eggai");
   expect(result.stdout).toContain("API key: provided (redacted)");
   expect(result.stdout).not.toContain(fixtureKey);
   expect(result.stdout).toContain('base_url = "https://api.example.test/v1?label=\\"powershell\\""');
@@ -108,9 +119,9 @@ test("dry-run accepts generated values, redacts the key, and never creates CODEX
   expect(result.stdout).toContain(`Backup file: ${codexHome}\\config.toml.eggai.bak`);
 });
 
-test("dry-run keeps stable defaults and reports Windows recovery paths without writes", () => {
+test("EggAi dry-run keeps stable defaults and reports Windows recovery paths without writes", () => {
   const codexHome = unusedCodexHome();
-  const result = runPowerShell(["-File", scriptPath, "-DryRun"], codexHome, {
+  const result = runPowerShell(["-File", scriptPath, "-DryRun", "-EggAi"], codexHome, {
     PATH: "",
   });
 
@@ -128,15 +139,15 @@ test("dry-run keeps stable defaults and reports Windows recovery paths without w
   expect(result.stdout).toContain("Would run codex login --with-api-key: yes");
 });
 
-test("dry-run rejects invalid language and Base URL before any install path", () => {
+test("EggAi dry-run rejects invalid language and Base URL before any install path", () => {
   const invalidLanguageHome = unusedCodexHome();
   const invalidBaseUrlHome = unusedCodexHome();
   const invalidLanguage = runPowerShell(
-    ["-File", scriptPath, "-DryRun", "-Language", "fr-fr"],
+    ["-File", scriptPath, "-DryRun", "-EggAi", "-Language", "fr-fr"],
     invalidLanguageHome,
   );
   const invalidBaseUrl = runPowerShell(
-    ["-File", scriptPath, "-DryRun", "-BaseUrl", "file:///eggai"],
+    ["-File", scriptPath, "-DryRun", "-EggAi", "-BaseUrl", "file:///eggai"],
     invalidBaseUrlHome,
   );
 

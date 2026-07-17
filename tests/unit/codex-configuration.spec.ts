@@ -2,9 +2,20 @@ import { expect, test } from "@playwright/test";
 
 import {
   buildCodexConfigToml,
+  buildPowerShellDefaultInstallCommand,
   buildPowerShellInstallCommand,
+  buildShellDefaultInstallCommand,
   buildShellInstallCommand,
 } from "../../src/lib/codex/configuration";
+
+test("default commands install Codex without selecting a third-party provider", () => {
+  expect(buildShellDefaultInstallCommand("https://docs.example.test/root")).toBe(
+    "curl -fsSL 'https://docs.example.test/root/install/codex.sh' | sh",
+  );
+  expect(buildPowerShellDefaultInstallCommand("https://docs.example.test/root")).toBe(
+    "irm 'https://docs.example.test/root/install/codex.ps1' | iex",
+  );
+});
 
 test("Shell configuration safely quotes the selected credential, URL, and language", () => {
   expect(
@@ -16,6 +27,7 @@ test("Shell configuration safely quotes the selected credential, URL, and langua
     }),
   ).toBe(
     "curl -fsSL 'https://docs.example.test/root/install/codex.sh' | sh -s -- " +
+      "--eggai " +
       "--sk-key 'sk-reader'\"'\"'s-$HOME' " +
       "--baseurl 'https://api.example.test/v1?group=reader'\"'\"'s' " +
       "--language 'en-us'",
@@ -31,10 +43,10 @@ test("PowerShell configuration safely quotes the selected credential, URL, langu
       language: "en-us",
     }),
   ).toBe(
-    "$env:SK_KEY = 'sk-reader''s-$HOME; `exit`'; " +
-      "$env:BASE_URL = 'https://api.example.test/v1?group=reader''s&value=$HOME'; " +
-      "$env:LANGUAGE = 'en-us'; " +
-      "irm 'https://docs.example.test/root''s/install/codex.ps1' | iex",
+    "& ([scriptblock]::Create((irm 'https://docs.example.test/root''s/install/codex.ps1'))) " +
+      "-EggAi -SkKey 'sk-reader''s-$HOME; `exit`' " +
+      "-BaseUrl 'https://api.example.test/v1?group=reader''s&value=$HOME' " +
+      "-Language 'en-us'",
   );
 });
 

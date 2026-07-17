@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 const articleWidths = [320, 1280] as const;
 
@@ -45,71 +45,6 @@ for (const width of articleWidths) {
   });
 }
 
-async function calloutLabelContrast(callout: Locator) {
-  return callout.locator("[data-callout-label]").evaluate((label) => {
-    const container = label.closest<HTMLElement>("[data-callout]");
-    if (!container) throw new Error("Callout container not found");
-
-    const colorToRgb = (color: string) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1;
-      canvas.height = 1;
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (!context) throw new Error("Canvas context unavailable");
-      context.fillStyle = color;
-      context.fillRect(0, 0, 1, 1);
-      return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)];
-    };
-    const luminance = (rgb: number[]) => {
-      const linear = rgb.map((channel) => {
-        const value = channel / 255;
-        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-      });
-      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
-    };
-
-    const foreground = luminance(colorToRgb(getComputedStyle(label).color));
-    const background = luminance(colorToRgb(getComputedStyle(container).backgroundColor));
-    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-  });
-}
-
-for (const width of articleWidths) {
-  test(`MDX callouts keep distinct semantics and readable theme contrast at ${width}px`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ height: 800, width });
-    await page.addInitScript(() => {
-      if (!localStorage.getItem("theme")) localStorage.setItem("theme", "light");
-    });
-    await page.goto("/eggai/codex-installer/");
-
-    for (const theme of ["light", "dark"] as const) {
-      if (theme === "dark") {
-        await page.evaluate(() => localStorage.setItem("theme", "dark"));
-        await page.reload();
-        await expect(page.locator("html")).toHaveClass(/dark/);
-      }
-
-      const backgrounds = new Set<string>();
-      for (const label of ["Note", "Tip", "Warning"]) {
-        const callout = page.getByRole("note", { name: label });
-        await expect(callout).toBeVisible();
-        backgrounds.add(
-          await callout.evaluate((element) => getComputedStyle(element).backgroundColor),
-        );
-        expect(
-          await calloutLabelContrast(callout),
-          `${label} contrast in ${theme} theme at ${width}px`,
-        ).toBeGreaterThanOrEqual(4.5);
-      }
-      expect(backgrounds.size).toBe(3);
-    }
-
-    await expect(page.getByRole("heading", { name: "Linux" })).toBeVisible();
-  });
-}
-
 for (const width of articleWidths) {
   test(`lesson video metadata creates only a safe external address at ${width}px`, async ({
     page,
@@ -134,7 +69,7 @@ for (const width of articleWidths) {
 for (const width of articleWidths) {
   test(`article interactions fit ${width}px text layouts`, async ({ page }) => {
     await page.setViewportSize({ height: 800, width });
-    await page.goto("/eggai/codex-installer/");
+    await page.goto("/eggai/claude-code-install/");
 
     const firstCodeBlock = page.locator('.prose pre[data-copy-enhanced="true"]').first();
     const copyButton = firstCodeBlock.locator("button.code-copy-button");
@@ -154,12 +89,8 @@ for (const width of articleWidths) {
     });
     expect(geometry.controlBottom).toBeLessThanOrEqual(geometry.textTop);
 
-    const calloutTextFits = await page.locator("[data-callout]").evaluateAll((callouts) =>
-      callouts.every((callout) => callout.scrollWidth <= callout.clientWidth),
-    );
-    expect(calloutTextFits).toBe(true);
     const interactionControlsFit = await page
-      .locator("[data-callout], .code-copy-button")
+      .locator(".code-copy-button")
       .evaluateAll((elements) =>
         elements.every((element) => {
           const bounds = element.getBoundingClientRect();

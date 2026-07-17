@@ -1,0 +1,39 @@
+---
+type: guide
+title: Claude Code 安装
+description: 使用官方安装脚本安装 Claude Code，并确认命令已经可用。
+publishedAt: 2026-07-17
+updatedAt: 2026-07-17
+tags: [install, claude-code]
+draft: false
+featured: false
+service: eggai
+app: claude-code
+order: 20
+---
+
+## macOS、Linux 或 WSL
+
+在终端运行：
+
+```sh
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+## Windows
+
+在 PowerShell 运行：
+
+```powershell
+irm https://claude.ai/install.ps1 | iex
+```
+
+## 验证安装
+
+安装结束后运行：
+
+```sh
+claude --version
+```
+
+看到版本号即表示安装完成。

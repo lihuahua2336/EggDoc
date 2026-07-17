@@ -20,8 +20,10 @@ export type EggAiApiAccountState =
   | { kind: "temporary-error" }
   | { kind: "unavailable" };
 
-export function useEggAiApiAccount() {
-  const [accountState, setAccountState] = useState<EggAiApiAccountState>({ kind: "loading" });
+export function useEggAiApiAccount(enabled = true) {
+  const [accountState, setAccountState] = useState<EggAiApiAccountState>(
+    enabled ? { kind: "loading" } : { kind: "anonymous" },
+  );
   const awaitingActivationReturn = useRef(false);
   const requestSequence = useRef(0);
 
@@ -58,6 +60,12 @@ export function useEggAiApiAccount() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      requestSequence.current += 1;
+      setAccountState({ kind: "anonymous" });
+      return;
+    }
+
     const controller = new AbortController();
     void checkAccount(controller.signal);
 
@@ -80,7 +88,7 @@ export function useEggAiApiAccount() {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("eggdoc:session-cleared", handleSessionCleared);
     };
-  }, [checkAccount]);
+  }, [checkAccount, enabled]);
 
   return {
     accountState,

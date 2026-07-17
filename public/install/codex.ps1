@@ -6,6 +6,7 @@ param(
   [ValidateSet("zh-cn", "en-us")]
   [string]$Language,
   [string]$CodexPackage = "Codex",
+  [switch]$EggAi,
   [switch]$DryRun
 )
 
@@ -21,6 +22,7 @@ if ([string]::IsNullOrWhiteSpace($Sk_Key)) {
 if ([string]::IsNullOrWhiteSpace($Language)) {
   $Language = if ($env:LANGUAGE) { $env:LANGUAGE } else { "zh-cn" }
 }
+$EggAiMode = $EggAi.IsPresent
 
 function Write-Step {
   param([string]$Key)
@@ -31,7 +33,8 @@ function Write-Step {
     "fallback" { Write-Host "Using the official Codex CLI installer to make the CLI available..." }
     "config" { Write-Host "Writing EggAi Codex configuration..." }
     "login" { Write-Host "Writing Codex API key login cache..." }
-    "done" { Write-Host "Done: Codex is configured to use EggAi." }
+    "done" { Write-Host "Done: Codex is installed." }
+    "eggai-done" { Write-Host "Done: Codex is installed and configured to use EggAi." }
     default { Write-Host $Key }
   }
 }
@@ -109,19 +112,10 @@ function Write-DryRunPlan {
   Add-CodexBinToPath
   $codex = Get-Command codex -ErrorAction SilentlyContinue
 
-  Write-Host "EggAi Codex installer dry run"
-  Write-Host "Mode: dry-run"
+  Write-Host "Codex installer dry run"
+  Write-Host "Mode: $(if ($EggAiMode) { 'eggai' } else { 'default' })"
   Write-Host "Codex package: $CodexPackage"
   Write-Host "Codex home: $(Split-Path -Parent $ConfigFile)"
-  Write-Host "Config file: $ConfigFile"
-  Write-Host "Backup file: $ConfigFile.eggai.bak"
-  Write-Host "Base URL: $ProviderBaseUrl"
-  Write-Host "Language: $Language"
-  if ([string]::IsNullOrWhiteSpace($Sk_Key)) {
-    Write-Host "API key: missing"
-  } else {
-    Write-Host "API key: provided (redacted)"
-  }
   Write-Host "Official fallback installer: https://chatgpt.com/codex/install.ps1"
   Write-Host ""
   Write-Host "Windows scenario check:"
@@ -145,6 +139,21 @@ function Write-DryRunPlan {
 
   Write-Host ""
   Write-Host "Would install/update Codex: yes"
+  if (-not $EggAiMode) {
+    Write-Host "Would write config.toml: no"
+    Write-Host "Would run codex login --with-api-key: no"
+    return
+  }
+
+  Write-Host "Config file: $ConfigFile"
+  Write-Host "Backup file: $ConfigFile.eggai.bak"
+  Write-Host "Base URL: $ProviderBaseUrl"
+  Write-Host "Language: $Language"
+  if ([string]::IsNullOrWhiteSpace($Sk_Key)) {
+    Write-Host "API key: missing"
+  } else {
+    Write-Host "API key: provided (redacted)"
+  }
   Write-Host "Would write config.toml: yes"
   Write-Host "Would run codex login --with-api-key: yes"
   Write-Host "Managed config preview:"
@@ -235,11 +244,11 @@ function Update-CodexConfig {
   return $backupFile
 }
 
-if ($Language -ne "zh-cn" -and $Language -ne "en-us") {
+if ($EggAiMode -and $Language -ne "zh-cn" -and $Language -ne "en-us") {
   Throw-InstallError "language must be zh-cn or en-us."
 }
 
-if ($BaseUrl -notmatch "^https?://") {
+if ($EggAiMode -and $BaseUrl -notmatch "^https?://") {
   Throw-InstallError "baseurl must start with http:// or https://."
 }
 
@@ -251,8 +260,8 @@ if ($DryRun) {
   exit 0
 }
 
-if ([string]::IsNullOrWhiteSpace($Sk_Key)) {
-  Throw-InstallError "sk-key is required. Set SK_KEY, EGGAI_API_KEY, or pass -SkKey."
+if ($EggAiMode -and [string]::IsNullOrWhiteSpace($Sk_Key)) {
+  Throw-InstallError "sk-key is required with EggAi mode. Set SK_KEY, EGGAI_API_KEY, or pass -SkKey."
 }
 
 Write-Step "winget"
@@ -284,6 +293,11 @@ if (-not $codexCommand) {
   Throw-InstallError "Codex was installed, but the codex command is not on PATH. Restart PowerShell and retry."
 }
 
+if (-not $EggAiMode) {
+  Write-Step "done"
+  exit 0
+}
+
 Write-Step "config"
 $backup = Update-CodexConfig -ConfigFile $configFile -ProviderBaseUrl $BaseUrl -Instructions (Get-DeveloperInstructions)
 
@@ -291,6 +305,6 @@ Write-Step "login"
 $Sk_Key | & $codexCommand.Source login --with-api-key | Out-Null
 & $codexCommand.Source login status | Out-Null
 
-Write-Step "done"
+Write-Step "eggai-done"
 Write-Host "Config: $configFile"
 Write-Host "Backup: $backup"

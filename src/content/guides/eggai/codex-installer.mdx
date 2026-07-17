@@ -1,159 +1,31 @@
 ---
 type: guide
-title: 用脚本把 Codex 接入 EggAi
-description: 通过 Linux shell 或 Windows PowerShell 安装/更新 Codex，并自动写入 EggAi Base URL 和 API Key。
+title: Codex 安装
+description: 复制一条命令安装 Codex；需要时可切换到 EggAi 配置，一次完成安装与 API 接入。
 publishedAt: 2026-07-03
-updatedAt: 2026-07-03
-tags: [eggai, codex, api]
+updatedAt: 2026-07-17
+tags: [install, codex, eggai]
 draft: false
 featured: true
 service: eggai
 app: codex
-order: 40
+order: 10
 ---
 
 import { EggAiCodexConfig } from "@/components/codex/EggAiCodexConfig";
 
+## 安装
+
+选择你的安装方式和操作系统，复制命令后粘贴到终端运行。
+
 <EggAiCodexConfig client:load />
 
-如果你希望 Codex 直接走 EggAi，可以使用 EggDoc 托管的安装脚本。脚本会完成三件事：
+## 验证安装
 
-1. 安装或更新 Codex。
-2. 写入 `~/.codex/config.toml`，把默认模型提供方切到 EggAi。
-3. 调用 `codex login --with-api-key`，让 Codex 自己更新 `~/.codex/auth.json`。
-
-<Note>
-  脚本需要一个 EggAi API Key。`baseurl` 默认是 `https://api.eggai.icu/v1`，`language` 支持 `zh-cn` 和 `en-us`。
-</Note>
-
-## Linux
-
-在 Linux 终端里运行：
+安装结束后运行：
 
 ```sh
-curl -fsSL https://eggdoc.pages.dev/install/codex.sh | sh -s -- \
-  --sk-key "sk-your-eggai-key" \
-  --baseurl "https://api.eggai.icu/v1" \
-  --language zh-cn
-```
-
-如果使用默认 Base URL，可以省略 `--baseurl`：
-
-```sh
-curl -fsSL https://eggdoc.pages.dev/install/codex.sh | sh -s -- \
-  --sk-key "sk-your-eggai-key"
-```
-
-脚本会使用 Codex 官方 shell 安装器安装或更新命令行工具，然后写入 EggAi 配置。
-
-## Windows
-
-在 PowerShell 里运行：
-
-```powershell
-$env:SK_KEY = "sk-your-eggai-key"
-$env:BASE_URL = "https://api.eggai.icu/v1"
-$env:LANGUAGE = "zh-cn"
-irm https://eggdoc.pages.dev/install/codex.ps1 | iex
-```
-
-如果使用默认 Base URL，也可以只传 API Key：
-
-```powershell
-$env:SK_KEY = "sk-your-eggai-key"; irm https://eggdoc.pages.dev/install/codex.ps1 | iex
-```
-
-Windows 脚本会先检查 `winget`。如果 `winget` 不可用，它会尝试修复 Microsoft App Installer；修复失败时会停止并报错。`winget` 可用后，脚本会通过 Microsoft Store 安装或更新 Codex，并在需要时使用 Codex 官方 PowerShell 安装器补齐命令行工具。
-
-## 参数
-
-| 参数 | 默认值 | 说明 |
-| --- | --- | --- |
-| `sk-key` / `SK_KEY` | 无 | EggAi API Key，必填。 |
-| `baseurl` / `BASE_URL` | `https://api.eggai.icu/v1` | EggAi 的 OpenAI 兼容接口地址。 |
-| `language` / `LANGUAGE` | `zh-cn` | 安装提示和 Codex 默认回复语言，可选 `zh-cn` 或 `en-us`。 |
-| `dry-run` / `DRY_RUN` | `false` | 只检查参数、安装来源和将要写入的配置，不安装 Codex，不修改文件，也不写入 API Key。 |
-
-## 先检查脚本是否正常
-
-<Tip>如果你想先确认脚本会做什么，可以使用 dry-run 模式。</Tip>
-
-Linux：
-
-```sh
-curl -fsSL https://eggdoc.pages.dev/install/codex.sh | sh -s -- \
-  --dry-run
-```
-
-Windows：
-
-```powershell
-& ([scriptblock]::Create((irm https://eggdoc.pages.dev/install/codex.ps1))) -DryRun
-```
-
-dry-run 会输出这些信息：
-
-- 将要使用的 Codex 安装器来源
-- 将要写入的 `config.toml` 路径
-- `baseurl`、`language` 和 API Key 是否已提供
-- EggAi provider 配置预览
-- 是否会执行 Codex 安装或更新
-- 是否会执行 `codex login --with-api-key`
-
-dry-run 可以不传 API Key。如果没有传，它会显示 `missing`；如果已经传入，也不会打印 API Key 原文，只会显示 `provided (redacted)`。真正安装时仍然必须提供 API Key。
-
-## Windows 场景说明
-
-Windows 脚本会覆盖这几种常见情况：
-
-| 场景 | 脚本行为 |
-| --- | --- |
-| `winget` 已存在 | 重置并更新 winget source，然后继续安装或更新 Codex。 |
-| `winget` 缺失 | 尝试下载 Microsoft App Installer 并通过 `Add-AppxPackage` 修复。 |
-| `winget` 修复失败 | 尝试打开 Microsoft Store 的 App Installer 页面，然后停止并输出明确错误。 |
-| Codex 已安装 | 优先通过 `winget upgrade` 更新 Microsoft Store 包。 |
-| Codex 未安装 | 先通过 `winget install` 安装；如果当前 PowerShell 会话仍找不到 `codex` 命令，再使用 Codex 官方 PowerShell 安装器补齐命令行工具。 |
-
-## 脚本会改哪些文件
-
-脚本会备份并更新：
-
-```txt
-~/.codex/config.toml
-```
-
-核心配置类似：
-
-```toml
-cli_auth_credentials_store = "file"
-model_provider = "eggai"
-
-[model_providers.eggai]
-name = "EggAi"
-base_url = "https://api.eggai.icu/v1"
-wire_api = "responses"
-requires_openai_auth = true
-```
-
-API Key 不会写进文档站代码。脚本会通过 Codex 登录命令更新本机的：
-
-```txt
-~/.codex/auth.json
-```
-
-<Warning>不要把 `auth.json` 提交到任何 Git 仓库。</Warning>
-
-## 验证
-
-安装完成后，可以运行：
-
-```sh
-codex login status
 codex --version
 ```
 
-如果 Codex 命令暂时不可用，先重开终端，再重新运行验证命令。
-
-## 继续学习
-
-完成 EggAi 接入后，可以回到 [Codex 安装与入门](/learn/codex-install/) 继续学习如何在项目目录里启动 Codex、让它读取上下文，并把需求描述成可以执行的 AI 编程任务。
+看到版本号即表示安装完成。

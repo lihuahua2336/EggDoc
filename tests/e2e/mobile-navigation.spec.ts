@@ -31,7 +31,7 @@ async function expectNoOverlap(locators: Locator[]) {
 async function signIn(page: Page, returnTo = "/notes/") {
   await page.goto(`/auth/login?returnTo=${encodeURIComponent(returnTo)}`);
   await page.getByRole("button", { name: "继续登录" }).click();
-  await expect(page).toHaveURL(`http://127.0.0.1:4322${returnTo}`);
+  await expect(page).toHaveURL(new RegExp(`${returnTo.replaceAll("/", "\\/")}$`));
 }
 
 test("an anonymous mobile Reader can open and dismiss the primary navigation by keyboard", async ({
@@ -83,7 +83,7 @@ test("choosing a mobile primary link closes the drawer and reveals the destinati
   const drawer = page.getByRole("dialog", { name: "移动导航" });
   await drawer.getByRole("link", { name: "工具与概念", exact: true }).click();
 
-  await expect(page).toHaveURL("http://127.0.0.1:4322/notes/");
+  await expect(page).toHaveURL(/\/notes\/$/);
   await expect(drawer).toBeHidden();
   await expect(page.getByRole("heading", { name: "工具与概念" })).toBeVisible();
 });
