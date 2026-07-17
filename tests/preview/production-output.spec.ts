@@ -65,14 +65,20 @@ function routeFromBuiltHtml(file: string) {
 }
 
 test("the production build serves Pagefind search and the sitemap", async ({ page, request }) => {
-  const [pagefind, sitemap] = await Promise.all([
+  const [pagefind, sitemap, claudeShellInstaller, claudePowerShellInstaller] = await Promise.all([
     request.get("/pagefind/pagefind.js"),
     request.get("/sitemap-index.xml"),
+    request.get("/install/claude-code.sh"),
+    request.get("/install/claude-code.ps1"),
   ]);
 
   expect(pagefind.status()).toBe(200);
   expect(sitemap.status()).toBe(200);
   expect(await sitemap.text()).toContain("sitemap-0.xml");
+  expect(claudeShellInstaller.status()).toBe(200);
+  expect(await claudeShellInstaller.text()).toContain("https://claude.ai/install.sh");
+  expect(claudePowerShellInstaller.status()).toBe(200);
+  expect(await claudePowerShellInstaller.text()).toContain("https://claude.ai/install.ps1");
 
   await page.goto("/search/");
   const searchInput = page.getByLabel("关键词");

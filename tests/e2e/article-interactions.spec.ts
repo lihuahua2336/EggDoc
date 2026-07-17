@@ -18,7 +18,7 @@ for (const width of articleWidths) {
 
     await expect(copyButton).toHaveAccessibleName("代码已复制");
     await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
-      "claude.ai/install.sh",
+      "eggdoc.pages.dev/install/claude-code.sh",
     );
   });
 
