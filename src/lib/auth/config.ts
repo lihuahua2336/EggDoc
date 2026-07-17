@@ -6,7 +6,10 @@ import {
   EGGDOC_OIDC_RESOURCE,
   EGGDOC_OIDC_SCOPES,
   EGGDOC_SESSION_SECRET,
+  EGGDOC_SITE_URL,
 } from "astro:env/server";
+
+import { isAllowedPublicSiteUrl } from "@/lib/auth/public-url";
 
 export type AuthConfig = {
   clientId: string;
@@ -16,10 +19,24 @@ export type AuthConfig = {
   resource: string;
   scopes: string;
   sessionSecret: string;
+  siteUrl: URL;
 };
 
-export function getAuthConfig(): AuthConfig | null {
+export function getSiteUrl(requestUrl: URL): URL | null {
+  try {
+    const siteUrl = new URL(EGGDOC_SITE_URL ?? requestUrl.origin);
+    if (!isAllowedPublicSiteUrl(siteUrl)) return null;
+    if (siteUrl.pathname !== "/" || siteUrl.search || siteUrl.hash) return null;
+    return siteUrl;
+  } catch {
+    return null;
+  }
+}
+
+export function getAuthConfig(requestUrl: URL): AuthConfig | null {
+  const siteUrl = getSiteUrl(requestUrl);
   if (
+    !siteUrl ||
     !EGGDOC_OIDC_ISSUER ||
     !EGGDOC_OIDC_CLIENT_ID ||
     !EGGDOC_OIDC_RESOURCE ||
@@ -39,6 +56,7 @@ export function getAuthConfig(): AuthConfig | null {
       resource: EGGDOC_OIDC_RESOURCE,
       scopes: EGGDOC_OIDC_SCOPES,
       sessionSecret: EGGDOC_SESSION_SECRET,
+      siteUrl,
     };
   } catch {
     return null;

@@ -6,8 +6,11 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
+    "build:container": "cross-env EGGDOC_DEPLOY_TARGET=node npm run build",
     "build:test": "cross-env CLOUDFLARE_ENV=test astro check && cross-env CLOUDFLARE_ENV=test astro build --mode test && pagefind --site dist/client",
+    "env:container": "node scripts/create-container-env.mjs",
     "preview": "astro preview",
+    "start:container": "node dist/server/entry.mjs",
     "check": "astro check",
     "test": "npm run build:test && playwright test tests/e2e tests/install tests/unit && npm run test:preview",
     "test:e2e": "npm run build:test && playwright test tests/e2e",
@@ -18,6 +21,7 @@
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.3",
     "@astrojs/mdx": "^7.0.2",
+    "@astrojs/node": "^11.0.2",
     "@astrojs/react": "^6.0.1",
     "@astrojs/sitemap": "^3.7.3",
     "@radix-ui/react-slot": "^1.3.0",

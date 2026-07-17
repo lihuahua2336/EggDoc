@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 
 import { getAuthConfig } from "@/lib/auth/config";
 import { discoverOidc, oidc } from "@/lib/auth/oidc";
+import { toPublicRequestUrl } from "@/lib/auth/public-url";
 import { addAuthError } from "@/lib/auth/redirect";
 import { redirectNoStore } from "@/lib/auth/response";
 import {
@@ -29,15 +30,16 @@ function getIdentity(claims: ReturnType<oidc.TokenEndpointResponseHelpers["claim
   return identity;
 }
 
-export const GET: APIRoute = async ({ cookies, request, url }) => {
-  const config = getAuthConfig();
+export const GET: APIRoute = async ({ cookies, url }) => {
+  const config = getAuthConfig(url);
   if (!config) return redirectNoStore(addAuthError("/", "unavailable"));
+  const publicUrl = toPublicRequestUrl(url, config.siteUrl);
 
   const session = await readSession(cookies, config.sessionSecret);
   const pending = session?.pending;
   const now = Math.floor(Date.now() / 1000);
   if (!session || !pending || now - pending.createdAt > AUTHORIZATION_PENDING_MAX_AGE_SECONDS) {
-    clearSession(cookies, url);
+    clearSession(cookies, publicUrl);
     return redirectNoStore(addAuthError("/", "failed"));
   }
 
@@ -46,7 +48,7 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
   const authorizationError = url.searchParams.get("error");
   if (authorizationError || returnedState !== pending.state) {
     session.pending = undefined;
-    await writeSession(cookies, url, session, config.sessionSecret);
+    await writeSession(cookies, publicUrl, session, config.sessionSecret);
     return redirectNoStore(
       addAuthError(
         returnTo,
@@ -61,7 +63,7 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
     const oidcConfig = await discoverOidc(config);
     const tokens = await oidc.authorizationCodeGrant(
       oidcConfig,
-      new URL(request.url),
+      publicUrl,
       {
         expectedNonce: pending.nonce,
         expectedState: pending.state,
@@ -82,11 +84,11 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
       refreshToken,
     };
     session.pending = undefined;
-    await writeSession(cookies, url, session, config.sessionSecret);
+    await writeSession(cookies, publicUrl, session, config.sessionSecret);
     return redirectNoStore(returnTo);
   } catch {
     session.pending = undefined;
-    await writeSession(cookies, url, session, config.sessionSecret);
+    await writeSession(cookies, publicUrl, session, config.sessionSecret);
     return redirectNoStore(addAuthError(returnTo, "failed"));
   }
 };

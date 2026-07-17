@@ -1,0 +1,29 @@
+name: eggdoc
+
+services:
+  app:
+    image: eggdoc:${EGGDOC_IMAGE_TAG:-local}
+    build:
+      context: .
+      args:
+        EGGDOC_SITE_URL: ${EGGDOC_SITE_URL:?Set EGGDOC_SITE_URL in .env}
+        PUBLIC_EGGAI_BASE_URL: ${PUBLIC_EGGAI_BASE_URL:?Set PUBLIC_EGGAI_BASE_URL in .env}
+        PUBLIC_INSTALLER_ORIGIN: ${PUBLIC_INSTALLER_ORIGIN:?Set PUBLIC_INSTALLER_ORIGIN in .env}
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      PORT: 4321
+    ports:
+      - "127.0.0.1:${EGGDOC_PORT:-4321}:4321"
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s

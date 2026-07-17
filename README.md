@@ -26,7 +26,7 @@ EggDoc 是一个中文优先的 AI 工具教程站，当前聚焦 Codex、Claude
 | 搜索 | Pagefind |
 | 身份认证 | EggAi Logto、OIDC Authorization Code + PKCE |
 | 会话 | Web Crypto 加密的 HttpOnly Cookie，无数据库 |
-| 运行时 | Cloudflare Workers；公开页面预渲染，认证/API 路由动态执行 |
+| 运行时 | Docker + Astro Node standalone；Cloudflare Worker 为可选目标 |
 | 测试 | Playwright + Astro 类型检查 |
 
 ## 工作方式
@@ -54,7 +54,9 @@ Reader -----> EggAi / Logto -----> 加密 EggDoc Session
 
 ```text
 EggDoc/
+|- deploy/nginx/               # 宿主机 Nginx 反向代理示例
 |- public/install/             # 面向读者的 Codex、Claude Code 安装脚本
+|- scripts/                    # 本地环境生成等维护脚本
 |- src/
 |  |- components/              # React/Astro 组件及基础 UI
 |  |- config/                  # 可公开的站点配置
@@ -79,7 +81,9 @@ EggDoc/
 |  |- research/                # 外部资料调研
 |  `- tutorials/               # 维护和验收教程
 |- CONTEXT.md                  # 项目领域语言的唯一入口
-|- astro.config.mjs            # Astro、Cloudflare、MDX、React、Sitemap 配置
+|- astro.config.mjs            # Astro、Node/Cloudflare、MDX、React、Sitemap 配置
+|- compose.yaml                # 容器构建、运行、安全和端口配置
+|- Dockerfile                  # Node standalone 多阶段生产镜像
 |- playwright.config.ts        # 浏览器测试与本地测试服务配置
 `- wrangler.toml               # Cloudflare Worker 与测试环境变量
 ```
@@ -128,6 +132,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
 | 变量 | 可见性 | 用途 |
 | --- | --- | --- |
+| `EGGDOC_SITE_URL` | 服务端及构建期 | 对外 HTTPS Origin，用于 canonical URL、OIDC 回调和安全 Cookie |
+| `EGGDOC_PORT` | Compose | 映射到宿主机 `127.0.0.1` 的端口，默认 `4321` |
 | `EGGDOC_OIDC_ISSUER` | 服务端 | Logto OIDC Issuer URL |
 | `EGGDOC_OIDC_CLIENT_ID` | 服务端 | EggDoc 专用 OIDC Client ID |
 | `EGGDOC_OIDC_CLIENT_SECRET` | 服务端，可选 | Confidential Client 的密钥 |
@@ -148,8 +154,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 | `npm run dev` | 启动 Astro 开发服务器 |
 | `npm run check` | 检查 Astro 与 TypeScript 类型 |
 | `npm run build` | 类型检查、生产构建、Pagefind 建索引并校验公开内容 |
+| `npm run build:container` | 使用 Astro Node standalone 生成容器运行产物 |
 | `npm run build:test` | 使用隔离测试配置生成测试构建 |
+| `npm run env:container` | 从 `.env.local` 生成被 Git 忽略的容器 `.env` |
 | `npm run preview` | 预览已生成的 Cloudflare 构建 |
+| `npm run start:container` | 运行已构建的 Node standalone 产物 |
 | `npm run test:e2e` | 构建并运行浏览器端到端测试 |
 | `npm run test:preview` | 验收生产构建、搜索与 Sitemap |
 | `npm test` | 运行完整测试套件 |
@@ -196,7 +205,7 @@ order: 10
 | `/api/eggai/account` | 动态 | EggAi API Account、模型和 EggAi API Credential 适配接口 |
 | `/api/health` | 动态 | 无缓存健康检查 |
 
-公开页面和搜索索引在构建阶段生成；动态路由由 Cloudflare adapter 输出的 Worker 执行。因此本项目不是纯静态站，也不应将 `dist/` 直接当作完整站点部署到普通静态文件服务器。
+公开页面和搜索索引在构建阶段生成；动态路由由 Node standalone 服务或可选的 Cloudflare Worker 执行。因此本项目不是纯静态站，也不应将 `dist/client` 单独当作完整站点部署。
 
 ## 测试策略
 
@@ -210,23 +219,93 @@ order: 10
 
 测试默认占用 `127.0.0.1:4322`（站点）和 `127.0.0.1:4323`（模拟服务）。运行前应确保端口未被其他进程占用。
 
-## 部署
+## 容器部署
 
-Cloudflare 是当前第一运行目标。部署命令为：
+生产部署采用“容器监听宿主机回环端口，宿主机 Nginx/Caddy 绑定域名并终止 TLS”的方式。容器同时提供预渲染页面、静态资源和动态 API，不需要数据库或持久化卷。
+
+### 1. 生成容器环境
+
+已有 `.env.local` 时运行：
+
+```bash
+npm run env:container
+```
+
+脚本会复制现有业务变量到被 Git 忽略的 `.env`，从 `PUBLIC_INSTALLER_ORIGIN` 推导 `EGGDOC_SITE_URL`，并加入默认 `EGGDOC_PORT=4321`。它不会打印变量值，也不会覆盖已有 `.env`；需要重新生成时使用：
+
+```bash
+npm run env:container -- --force
+```
+
+部署前检查 `.env` 中以下两个值都使用真实 HTTPS 域名且 Origin 一致：
+
+```dotenv
+EGGDOC_SITE_URL=https://docs.example.com
+PUBLIC_INSTALLER_ORIGIN=https://docs.example.com
+```
+
+`EGGDOC_SITE_URL` 不能包含路径、查询参数或片段。真实 `.env` 不得提交、复制进镜像或发送到日志。
+
+### 2. 构建并启动
+
+```bash
+docker compose config
+docker compose build
+docker compose up -d
+docker compose ps
+```
+
+默认只开放宿主机回环地址：
+
+```text
+127.0.0.1:4321 -> container:4321
+```
+
+需要更换宿主机端口时修改 `.env` 的 `EGGDOC_PORT`。不要将端口绑定改为 `0.0.0.0`，公网流量应统一经过 HTTPS 反向代理。
+
+### 3. 配置域名
+
+复制 [`deploy/nginx/eggdoc.conf.example`](deploy/nginx/eggdoc.conf.example) 到宿主机 Nginx 配置，替换 `docs.example.com`，再由 Certbot、面板或现有证书流程启用 HTTPS。反向代理目标保持为：
+
+```text
+http://127.0.0.1:4321
+```
+
+同时在 Logto 的 EggDoc 应用中注册精确回调地址：
+
+```text
+https://docs.example.com/auth/callback
+```
+
+容器内部使用 HTTP，但认证路由依据 `EGGDOC_SITE_URL` 生成 HTTPS 回调、验证 Origin 并设置 Secure Cookie，不依赖不受信任的转发头推断外部地址。
+
+### 4. 验收和运维
+
+```bash
+curl http://127.0.0.1:4321/api/health
+docker compose logs -f app
+docker compose restart app
+docker compose down
+```
+
+健康响应应为 `{"status":"ok"}`。升级时重新拉取代码并执行：
+
+```bash
+docker compose build --pull
+docker compose up -d
+```
+
+镜像使用非 root 用户、只读根文件系统、移除 Linux capabilities，并且不包含 `.env`。多副本必须共享相同的 `EGGDOC_SESSION_SECRET`；更换该值会让现有 EggDoc Session 失效。
+
+### 可选 Cloudflare 部署
+
+Cloudflare Adapter 与 Wrangler 配置仍保留为次要目标：
 
 ```bash
 npm run deploy:cloudflare
 ```
 
-部署前需要：
-
-1. 使用 `wrangler login` 或 CI Token 完成 Cloudflare 认证。
-2. 为生产 Worker 配置 `.env.example` 中的服务端变量；敏感值使用 Wrangler Secret 或 Cloudflare 控制台保存。
-3. 将 `PUBLIC_EGGAI_BASE_URL` 与 `PUBLIC_INSTALLER_ORIGIN` 作为构建期公开配置注入。
-4. 确认 `astro.config.mjs` 中的 `site` 与生产域名一致，否则 canonical URL 和 Sitemap 会错误。
-5. 运行 `npm test`，再执行部署并请求 `/api/health` 做冒烟检查。
-
-Cloudflare 配置见 [`wrangler.toml`](wrangler.toml)。`[env.test.vars]` 只服务于本地隔离测试，不是生产配置。
+Cloudflare 配置见 [`wrangler.toml`](wrangler.toml)；`[env.test.vars]` 只用于隔离测试，不是生产配置。
 
 ## 安全约束
 

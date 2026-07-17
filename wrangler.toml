@@ -2,6 +2,7 @@ name = "eggdoc"
 compatibility_date = "2026-07-03"
 
 [env.test.vars]
+EGGDOC_SITE_URL = "http://127.0.0.1:4322"
 EGGDOC_OIDC_ISSUER = "http://127.0.0.1:4323"
 EGGDOC_OIDC_CLIENT_ID = "eggdoc-test-client"
 EGGDOC_OIDC_CLIENT_SECRET = "eggdoc-test-secret"

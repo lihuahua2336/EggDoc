@@ -3,6 +3,7 @@ import type { APIRoute } from "astro";
 import { PUBLIC_EGGAI_BASE_URL } from "@/config/public";
 import { getCurrentAuthorization } from "@/lib/auth/authorization";
 import { getAuthConfig } from "@/lib/auth/config";
+import { toPublicRequestUrl } from "@/lib/auth/public-url";
 import { clearSession } from "@/lib/auth/session";
 import type { EggAiApiAccountResponse } from "@/lib/eggai/account-response";
 import { getEcosystemUrl } from "@/lib/eggai/config";
@@ -22,11 +23,12 @@ function json(body: EggAiApiAccountResponse, status = 200) {
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const config = getAuthConfig();
+  const config = getAuthConfig(url);
   const ecosystemUrl = getEcosystemUrl();
   if (!config || !ecosystemUrl) return json({ state: "unavailable" }, 503);
+  const publicUrl = toPublicRequestUrl(url, config.siteUrl);
 
-  const current = await getCurrentAuthorization(cookies, url, config);
+  const current = await getCurrentAuthorization(cookies, publicUrl, config);
   if (!current.authorization) {
     return json(
       { state: current.reauthorizationRequired ? "reauthorization-required" : "anonymous" },
@@ -39,7 +41,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     current.authorization.accessToken,
   );
   if (account.kind === "authorization-expired") {
-    clearSession(cookies, url);
+    clearSession(cookies, publicUrl);
     return json({ state: "reauthorization-required" }, 401);
   }
   if (account.kind === "temporary-error") {
@@ -53,7 +55,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       PUBLIC_EGGAI_BASE_URL,
     );
     if (configuration.kind === "authorization-expired") {
-      clearSession(cookies, url);
+      clearSession(cookies, publicUrl);
       return json({ state: "reauthorization-required" }, 401);
     }
     if (configuration.kind === "inactive") {
