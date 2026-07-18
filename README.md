@@ -133,7 +133,6 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 | 变量 | 可见性 | 用途 |
 | --- | --- | --- |
 | `EGGDOC_SITE_URL` | 服务端及构建期 | 对外 HTTPS Origin，用于 canonical URL、OIDC 回调和安全 Cookie |
-| `EGGDOC_PORT` | Compose | 映射到宿主机 `127.0.0.1` 的端口，默认 `4321` |
 | `EGGDOC_OIDC_ISSUER` | 服务端 | Logto OIDC Issuer URL |
 | `EGGDOC_OIDC_CLIENT_ID` | 服务端 | EggDoc 专用 OIDC Client ID |
 | `EGGDOC_OIDC_CLIENT_SECRET` | 服务端，可选 | Confidential Client 的密钥 |
@@ -231,7 +230,7 @@ order: 10
 npm run env:container
 ```
 
-脚本会复制现有业务变量到被 Git 忽略的 `.env`，从 `PUBLIC_INSTALLER_ORIGIN` 推导 `EGGDOC_SITE_URL`，并加入默认 `EGGDOC_PORT=4321`。它不会打印变量值，也不会覆盖已有 `.env`；需要重新生成时使用：
+脚本会复制现有业务变量到被 Git 忽略的 `.env`，并从 `PUBLIC_INSTALLER_ORIGIN` 推导 `EGGDOC_SITE_URL`。它不会打印变量值，也不会覆盖已有 `.env`；需要重新生成时使用：
 
 ```bash
 npm run env:container -- --force
@@ -255,20 +254,20 @@ docker compose up -d
 docker compose ps
 ```
 
-默认只开放宿主机回环地址：
+默认只开放宿主机回环地址，宿主机和容器内部端口均固定为 `4322`：
 
 ```text
-127.0.0.1:4321 -> container:4321
+127.0.0.1:4322 -> container:4322
 ```
 
-需要更换宿主机端口时修改 `.env` 的 `EGGDOC_PORT`。不要将端口绑定改为 `0.0.0.0`，公网流量应统一经过 HTTPS 反向代理。
+不要修改端口映射或将端口绑定改为 `0.0.0.0`，公网流量应统一经过 HTTPS 反向代理。
 
 ### 3. 配置域名
 
 复制 [`deploy/nginx/eggdoc.conf.example`](deploy/nginx/eggdoc.conf.example) 到宿主机 Nginx 配置，替换 `docs.example.com`，再由 Certbot、面板或现有证书流程启用 HTTPS。反向代理目标保持为：
 
 ```text
-http://127.0.0.1:4321
+http://127.0.0.1:4322
 ```
 
 同时在 Logto 的 EggDoc 应用中注册精确回调地址：
@@ -282,7 +281,7 @@ https://docs.example.com/auth/callback
 ### 4. 验收和运维
 
 ```bash
-curl http://127.0.0.1:4321/api/health
+curl http://127.0.0.1:4322/api/health
 docker compose logs -f app
 docker compose restart app
 docker compose down

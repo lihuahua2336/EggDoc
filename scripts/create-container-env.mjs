@@ -54,8 +54,6 @@ if (!assignments.has("EGGDOC_SITE_URL")) {
   const installerOrigin = new URL(unquote(assignments.get("PUBLIC_INSTALLER_ORIGIN")));
   additions.push(`EGGDOC_SITE_URL=${installerOrigin.origin}`);
 }
-if (!assignments.has("EGGDOC_PORT")) additions.push("EGGDOC_PORT=4321");
-
 const output = `${source.trimEnd()}\n${additions.length ? `\n# Container deployment\n${additions.join("\n")}\n` : ""}`;
 await writeFile(targetPath, output, { encoding: "utf8", flag: force ? "w" : "wx", mode: 0o600 });
 

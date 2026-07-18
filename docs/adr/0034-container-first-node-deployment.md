@@ -1,6 +1,6 @@
 # Container-first Node deployment behind a host reverse proxy
 
-EggDoc uses an OCI container running the Astro Node standalone adapter as its primary production deployment. The container serves both prerendered public assets and dynamic authentication/API routes, binds its published port to the host loopback interface, and relies on a host-managed Nginx or Caddy reverse proxy for the public HTTPS domain. Cloudflare Worker deployment remains available as a secondary target through the existing adapter and Wrangler configuration.
+EggDoc uses an OCI container running the Astro Node standalone adapter as its primary production deployment. The container serves both prerendered public assets and dynamic authentication/API routes, binds fixed port 4322 to the host loopback interface, and relies on a host-managed Nginx or Caddy reverse proxy for the public HTTPS domain. Cloudflare Worker deployment remains available as a secondary target through the existing adapter and Wrangler configuration.
 
 The deployment uses one ignored `.env` file for Compose interpolation and container runtime variables. Only `EGGDOC_SITE_URL`, `PUBLIC_EGGAI_BASE_URL`, and `PUBLIC_INSTALLER_ORIGIN` enter the image build because they determine canonical URLs and public client configuration; OIDC, session, and EggAi service secrets are injected only when the container starts. The image must not copy `.env`, `.env.local`, or other secret files into any layer.
 

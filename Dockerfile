@@ -24,7 +24,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
-ENV PORT=4321
+ENV PORT=4322
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
@@ -33,9 +33,9 @@ COPY --from=build --chown=node:node /app/dist ./dist
 
 USER node
 
-EXPOSE 4321
+EXPOSE 4322
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:4321/api/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:4322/api/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"]
 
 CMD ["node", "dist/server/entry.mjs"]
