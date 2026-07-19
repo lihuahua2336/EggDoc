@@ -28,7 +28,7 @@ Examples:
 
 - Install and configure Codex
 - Understand AI programming workflows
-- Build the EggDoc site with Astro and shadcn/ui
+- Recreate EggDoc from an empty folder with Codex as a Harness-based final project
 - Add Markdown/MDX content rendering and search
 
 **Note**
@@ -275,7 +275,7 @@ Suggested first content:
 - EggAi: Use the Codex setup script
 - AI Programming: Install and configure Codex
 - AI Programming: What is AI programming?
-- AI Programming: Build EggDoc with Astro and shadcn/ui
+- AI Programming: Recreate EggDoc from an empty folder with Codex
 - Note: What is MCP?
 - Note: What is an AI agent?
 

@@ -7,7 +7,11 @@ import {
   TOOL_TUTORIALS_LABEL,
 } from "@/lib/content";
 
-const guides = await getToolTutorials();
+const homepageGuideIds = new Set([
+  "eggai/claude-code-install",
+  "eggai/codex-installer",
+]);
+const guides = (await getToolTutorials()).filter((entry) => homepageGuideIds.has(entry.id));
 ---
 
 <BaseLayout title="EggDoc" description={TOOL_TUTORIALS_DESCRIPTION}>
