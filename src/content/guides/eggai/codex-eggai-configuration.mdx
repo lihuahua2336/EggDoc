@@ -65,7 +65,7 @@ $env:EGGAI_CODEX_ENV_SCOPE = 'User'
 
 EggAi 模式在修改本地文件前会用所选 API Key 请求 EggAi `Base URL` 的 `/models`。该检查通过后，Codex 运行时直接访问 EggAi，不会执行 `codex login`，也不依赖 OpenAI/ChatGPT 账户网络。
 
-安装器下载是另一条网络链路。官方 Codex 安装地址无法访问时，请在执行前为当前终端设置 `CODEX_INSTALLER_URL`，指向组织内经过审核的可达镜像；Shell 也会透传 `HTTPS_PROXY`、`HTTP_PROXY` 和 `NO_PROXY`。如果是 EggDoc 页面生成的命令，请将部署环境的 `PUBLIC_INSTALLER_ORIGIN` 配置为中国用户可访问的自定义域名，并可通过 `PUBLIC_CODEX_INSTALLER_URL` 自动把镜像地址注入一键命令。
+安装器下载是另一条网络链路。官方 Codex 安装地址无法访问时，请在执行前为当前终端设置 `CODEX_INSTALLER_URL`，指向组织内经过审核的可达镜像；Shell 也会透传 `HTTPS_PROXY`、`HTTP_PROXY` 和 `NO_PROXY`。如果是 EggDoc 页面生成的命令，请将部署环境的 `PUBLIC_INSTALLER_ORIGIN` 配置为中国用户可访问的自定义域名，并可通过 `PUBLIC_CODEX_INSTALLER_ORIGIN` 自动按平台注入正确的 `.sh` 或 `.ps1` 镜像地址。
 
 因此，“EggAi 配置成功”表示 EggAi 端点、模型和本地配置验证通过；它不表示官方账户登录或官方账户 API 在当前网络中可用。
 

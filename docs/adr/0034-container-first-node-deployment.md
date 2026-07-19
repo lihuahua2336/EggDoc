@@ -6,7 +6,7 @@ The deployment uses one ignored `.env` file for Compose interpolation and contai
 
 `EGGDOC_SITE_URL` is the canonical public origin for OIDC callback URLs, Origin validation, and secure EggDoc Session cookies. Dynamic routes use this configured origin instead of trusting the container's internal HTTP request URL or forwarded headers. Because Astro's framework Origin check sees the internal HTTP origin before a route runs, the Node target disables that framework check and the only state-changing route performs an explicit canonical-origin check; the Cloudflare target retains the framework check. This makes the loopback HTTP port safe to place behind an external HTTPS reverse proxy and prevents the Node adapter from producing insecure `http://` callbacks.
 
-Public installer configuration also includes optional `PUBLIC_CODEX_INSTALLER_URL` and `PUBLIC_CLAUDE_CODE_INSTALLER_URL` upstream mirror URLs. They are build-time, non-secret values and are used only to make generated installer commands usable when official installer hosts are not reachable from the deployment region.
+Public installer configuration also includes optional `PUBLIC_CODEX_INSTALLER_ORIGIN` and `PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN` upstream mirror directories. They are build-time, non-secret values; the page appends the correct `.sh` or `.ps1` filename for each platform so a single deployment setting cannot accidentally run a Shell script through PowerShell.
 
 The container is stateless and requires no application volume because EggDoc keeps its encrypted session in the Reader's cookie and does not persist EggAi API Credentials. Every replica must use the same `EGGDOC_SESSION_SECRET`; rotating it invalidates existing EggDoc Sessions.
 

@@ -2,22 +2,31 @@ function installerUrl(installerOrigin: string, filename: "claude-code.ps1" | "cl
   return `${installerOrigin.replace(/\/$/, "")}/install/${filename}`;
 }
 
+function overrideInstallerUrl(
+  installerOrigin: string | undefined,
+  filename: "claude-code.ps1" | "claude-code.sh",
+) {
+  return installerOrigin ? `${installerOrigin.replace(/\/$/, "")}/${filename}` : undefined;
+}
+
 export function buildClaudeCodeShellDefaultInstallCommand(
   installerOrigin: string,
-  installerUrlOverride?: string,
+  installerOriginOverride?: string,
 ) {
-  const override = installerUrlOverride
-    ? `CLAUDE_CODE_INSTALLER_URL=${quoteShellArgument(installerUrlOverride)} `
+  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "claude-code.sh");
+  const override = overrideUrl
+    ? `CLAUDE_CODE_INSTALLER_URL=${quoteShellArgument(overrideUrl)} `
     : "";
   return `curl -fsSL ${quoteShellArgument(installerUrl(installerOrigin, "claude-code.sh"))} | ${override}sh`;
 }
 
 export function buildClaudeCodePowerShellDefaultInstallCommand(
   installerOrigin: string,
-  installerUrlOverride?: string,
+  installerOriginOverride?: string,
 ) {
-  const override = installerUrlOverride
-    ? `$env:CLAUDE_CODE_INSTALLER_URL=${quotePowerShellArgument(installerUrlOverride)}; `
+  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "claude-code.ps1");
+  const override = overrideUrl
+    ? `$env:CLAUDE_CODE_INSTALLER_URL=${quotePowerShellArgument(overrideUrl)}; `
     : "";
   return `${override}irm ${quotePowerShellArgument(installerUrl(installerOrigin, "claude-code.ps1"))} | iex`;
 }
@@ -26,18 +35,19 @@ export function buildClaudeCodeShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  installerUrlOverride,
+  installerOriginOverride,
   models,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  installerUrlOverride?: string;
+  installerOriginOverride?: string;
   models: ClaudeCodeModels;
 }) {
   const anthropicBaseUrl = normalizeClaudeCodeBaseUrl(baseUrl);
-  const override = installerUrlOverride
-    ? `CLAUDE_CODE_INSTALLER_URL=${quoteShellArgument(installerUrlOverride)} `
+  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "claude-code.sh");
+  const override = overrideUrl
+    ? `CLAUDE_CODE_INSTALLER_URL=${quoteShellArgument(overrideUrl)} `
     : "";
   return (
     `curl -fsSL ${quoteShellArgument(installerUrl(installerOrigin, "claude-code.sh"))} | ${override}sh -s -- ` +
@@ -54,18 +64,19 @@ export function buildClaudeCodePowerShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  installerUrlOverride,
+  installerOriginOverride,
   models,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  installerUrlOverride?: string;
+  installerOriginOverride?: string;
   models: ClaudeCodeModels;
 }) {
   const anthropicBaseUrl = normalizeClaudeCodeBaseUrl(baseUrl);
-  const override = installerUrlOverride
-    ? `$env:CLAUDE_CODE_INSTALLER_URL=${quotePowerShellArgument(installerUrlOverride)}; `
+  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "claude-code.ps1");
+  const override = overrideUrl
+    ? `$env:CLAUDE_CODE_INSTALLER_URL=${quotePowerShellArgument(overrideUrl)}; `
     : "";
   return (
     `${override}& ([scriptblock]::Create((irm ${quotePowerShellArgument(installerUrl(installerOrigin, "claude-code.ps1"))}))) ` +

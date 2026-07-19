@@ -7,26 +7,32 @@ function installerUrl(installerOrigin: string, filename: "codex.ps1" | "codex.sh
   return `${installerOrigin.replace(/\/$/, "")}/install/${filename}`;
 }
 
+function overrideInstallerUrl(installerOrigin: string | undefined, filename: "codex.ps1" | "codex.sh") {
+  return installerOrigin ? `${installerOrigin.replace(/\/$/, "")}/${filename}` : undefined;
+}
+
 const developerInstructions: Record<CodexLanguage, string> = {
   "en-us": "Respond in English by default unless the user explicitly asks for another language.",
   "zh-cn": "请默认使用简体中文回答，除非用户明确要求其他语言。",
 };
 
-export function buildShellDefaultInstallCommand(installerOrigin: string, installerUrlOverride?: string) {
+export function buildShellDefaultInstallCommand(installerOrigin: string, installerOriginOverride?: string) {
   const scriptUrl = installerUrl(installerOrigin, "codex.sh");
-  const override = installerUrlOverride
-    ? `CODEX_INSTALLER_URL=${quoteShellArgument(installerUrlOverride)} `
+  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "codex.sh");
+  const override = overrideUrl
+    ? `CODEX_INSTALLER_URL=${quoteShellArgument(overrideUrl)} `
     : "";
   return `curl -fsSL ${quoteShellArgument(scriptUrl)} | ${override}sh`;
 }
 
 export function buildPowerShellDefaultInstallCommand(
   installerOrigin: string,
-  installerUrlOverride?: string,
+  installerOriginOverride?: string,
 ) {
   const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
-  const override = installerUrlOverride
-    ? `$env:CODEX_INSTALLER_URL=${quotePowerShellArgument(installerUrlOverride)}; `
+  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "codex.ps1");
+  const override = overrideUrl
+    ? `$env:CODEX_INSTALLER_URL=${quotePowerShellArgument(overrideUrl)}; `
     : "";
   return `${override}irm ${quotePowerShellArgument(scriptUrl)} | iex`;
 }
@@ -35,20 +41,21 @@ export function buildShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  installerUrlOverride,
+  installerOriginOverride,
   language,
   model,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  installerUrlOverride?: string;
+  installerOriginOverride?: string;
   language: CodexLanguage;
   model: string;
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.sh");
-  const override = installerUrlOverride
-    ? `CODEX_INSTALLER_URL=${quoteShellArgument(installerUrlOverride)} `
+  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "codex.sh");
+  const override = overrideUrl
+    ? `CODEX_INSTALLER_URL=${quoteShellArgument(overrideUrl)} `
     : "";
 
   return (
@@ -65,20 +72,21 @@ export function buildPowerShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  installerUrlOverride,
+  installerOriginOverride,
   language,
   model,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  installerUrlOverride?: string;
+  installerOriginOverride?: string;
   language: CodexLanguage;
   model: string;
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
-  const override = installerUrlOverride
-    ? `$env:CODEX_INSTALLER_URL=${quotePowerShellArgument(installerUrlOverride)}; `
+  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "codex.ps1");
+  const override = overrideUrl
+    ? `$env:CODEX_INSTALLER_URL=${quotePowerShellArgument(overrideUrl)}; `
     : "";
 
   return (

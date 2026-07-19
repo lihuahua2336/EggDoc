@@ -22,19 +22,19 @@ test("Claude Code commands can use a deployment-provided installer mirror", () =
   expect(
     buildClaudeCodeShellDefaultInstallCommand(
       "https://docs.example.test/root",
-      "https://mirror.example.test/claude/install.sh",
+      "https://mirror.example.test/claude",
     ),
   ).toBe(
     "curl -fsSL 'https://docs.example.test/root/install/claude-code.sh' | " +
-      "CLAUDE_CODE_INSTALLER_URL='https://mirror.example.test/claude/install.sh' sh",
+      "CLAUDE_CODE_INSTALLER_URL='https://mirror.example.test/claude/claude-code.sh' sh",
   );
   expect(
     buildClaudeCodePowerShellDefaultInstallCommand(
       "https://docs.example.test/root",
-      "https://mirror.example.test/claude/install.ps1",
+      "https://mirror.example.test/claude",
     ),
   ).toBe(
-    "$env:CLAUDE_CODE_INSTALLER_URL='https://mirror.example.test/claude/install.ps1'; " +
+    "$env:CLAUDE_CODE_INSTALLER_URL='https://mirror.example.test/claude/claude-code.ps1'; " +
       "irm 'https://docs.example.test/root/install/claude-code.ps1' | iex",
   );
 });

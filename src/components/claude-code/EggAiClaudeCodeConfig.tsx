@@ -17,7 +17,7 @@ import { useEggAiApiAccount } from "@/components/codex/useEggAiApiAccount";
 import { Button } from "@/components/ui/button";
 import {
   CONFIGURATION_PLACEHOLDER,
-  PUBLIC_CLAUDE_CODE_INSTALLER_URL,
+  PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
   PUBLIC_EGGAI_BASE_URL,
   PUBLIC_INSTALLER_ORIGIN,
 } from "@/config/public";
@@ -170,11 +170,11 @@ export function EggAiClaudeCodeConfig() {
     platform === "windows"
       ? buildClaudeCodePowerShellDefaultInstallCommand(
           PUBLIC_INSTALLER_ORIGIN,
-          PUBLIC_CLAUDE_CODE_INSTALLER_URL,
+          PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
         )
       : buildClaudeCodeShellDefaultInstallCommand(
           PUBLIC_INSTALLER_ORIGIN,
-          PUBLIC_CLAUDE_CODE_INSTALLER_URL,
+          PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
         );
   const eggAiCommand =
     platform === "windows"
@@ -182,14 +182,14 @@ export function EggAiClaudeCodeConfig() {
           apiKey,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-          installerUrlOverride: PUBLIC_CLAUDE_CODE_INSTALLER_URL,
+          installerOriginOverride: PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
           models: modelsForPreview,
         })
       : buildClaudeCodeShellInstallCommand({
           apiKey,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-          installerUrlOverride: PUBLIC_CLAUDE_CODE_INSTALLER_URL,
+          installerOriginOverride: PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
           models: modelsForPreview,
         });
   const command = mode === "official" ? officialCommand : eggAiCommand;

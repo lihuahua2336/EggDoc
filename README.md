@@ -144,8 +144,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 | `EGGDOC_EGGAI_ECOSYSTEM_URL` | 服务端 | EggAi Ecosystem API 根地址 |
 | `PUBLIC_EGGAI_BASE_URL` | 公开 | 生成集成配置时使用的默认 API Base URL |
 | `PUBLIC_INSTALLER_ORIGIN` | 公开 | 托管安装脚本的站点 Origin |
-| `PUBLIC_CODEX_INSTALLER_URL` | 公开，可选 | Codex 官方安装器的中国可达镜像 URL，注入生成命令的 `CODEX_INSTALLER_URL` |
-| `PUBLIC_CLAUDE_CODE_INSTALLER_URL` | 公开，可选 | Claude Code 官方安装器的中国可达镜像 URL，注入生成命令的 `CLAUDE_CODE_INSTALLER_URL` |
+| `PUBLIC_CODEX_INSTALLER_ORIGIN` | 公开，可选 | Codex 官方安装器的中国可达镜像目录，按平台注入 `.sh` 或 `.ps1` URL |
+| `PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN` | 公开，可选 | Claude Code 官方安装器的中国可达镜像目录，按平台注入 `.sh` 或 `.ps1` URL |
 
 前缀为 `PUBLIC_` 的值会进入客户端构建，不能包含秘密。服务端变量缺失或格式无效时，公开教程仍可访问，但认证和个性化配置接口会降级为不可用状态。
 
