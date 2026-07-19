@@ -133,6 +133,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 | 变量 | 可见性 | 用途 |
 | --- | --- | --- |
 | `EGGDOC_SITE_URL` | 服务端及构建期 | 对外 HTTPS Origin，用于 canonical URL、OIDC 回调和安全 Cookie |
+| `EGGDOC_IMAGE` | Compose | VPS 拉取的公开 GHCR 镜像，例如 `ghcr.io/owner/eggdoc:latest` |
 | `EGGDOC_OIDC_ISSUER` | 服务端 | Logto OIDC Issuer URL |
 | `EGGDOC_OIDC_CLIENT_ID` | 服务端 | EggDoc 专用 OIDC Client ID |
 | `EGGDOC_OIDC_CLIENT_SECRET` | 服务端，可选 | Confidential Client 的密钥 |
@@ -305,6 +306,30 @@ npm run deploy:cloudflare
 ```
 
 Cloudflare 配置见 [`wrangler.toml`](wrangler.toml)；`[env.test.vars]` 只用于隔离测试，不是生产配置。
+
+### GitHub 与 VPS 自动发布
+
+推送到 `main` 或 `v*` Tag 时，[`publish-container.yml`](.github/workflows/publish-container.yml) 会先扫描 Git 历史中的密钥，再构建 `linux/amd64`、`linux/arm64` 镜像并发布到 GitHub Container Registry。Workflow 使用固定版本的第三方 Action，并且只接收三个公开的 Repository Variables：
+
+- `EGGDOC_SITE_URL`
+- `PUBLIC_EGGAI_BASE_URL`
+- `PUBLIC_INSTALLER_ORIGIN`
+
+OIDC Client Secret、EggDoc Session Secret 和 EggAi 服务端配置不进入 GitHub Actions。它们只保存在 VPS 上被 Git 忽略的 `.env` 中，由 Compose 的 `env_file` 在容器启动时注入。
+
+VPS 首次部署时克隆公开仓库、创建 `.env` 并填写生产值，其中镜像地址使用：
+
+```dotenv
+EGGDOC_IMAGE=ghcr.io/lihuahua2336/eggdoc:latest
+```
+
+以后部署或升级只需运行：
+
+```bash
+./deploy/vps/deploy.sh
+```
+
+脚本会拉取最新镜像、无构建重建容器，并等待 `/api/health` 变为健康。VPS 配置使用 [`compose.vps.yaml`](compose.vps.yaml) 覆盖本地镜像，但继续复用固定的 `127.0.0.1:4322` 端口、安全限制和 `.env` 注入。
 
 ## 安全约束
 

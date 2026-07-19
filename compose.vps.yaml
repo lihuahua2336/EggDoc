@@ -1,0 +1,4 @@
+services:
+  app:
+    image: ${EGGDOC_IMAGE:?Set EGGDOC_IMAGE in .env}
+    pull_policy: always

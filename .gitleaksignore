@@ -1,0 +1,4 @@
+# Confirmed non-production fixture findings already present in repository history.
+3dcd92754307895b031b9ba6db86efdfd11b97e8:.env.test:generic-api-key:7
+8ef32750adcc625e67633d31c856a9d6cb84f3c3:tests/unit/session.spec.ts:generic-api-key:11
+8ef32750adcc625e67633d31c856a9d6cb84f3c3:wrangler.toml:generic-api-key:10
