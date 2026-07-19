@@ -18,6 +18,27 @@ test("default commands install Codex without selecting a third-party provider", 
   );
 });
 
+test("Codex commands can use a deployment-provided installer mirror", () => {
+  expect(
+    buildShellDefaultInstallCommand(
+      "https://docs.example.test/root",
+      "https://mirror.example.test/codex/install.sh",
+    ),
+  ).toBe(
+    "curl -fsSL 'https://docs.example.test/root/install/codex.sh' | " +
+      "CODEX_INSTALLER_URL='https://mirror.example.test/codex/install.sh' sh",
+  );
+  expect(
+    buildPowerShellDefaultInstallCommand(
+      "https://docs.example.test/root",
+      "https://mirror.example.test/codex/install.ps1",
+    ),
+  ).toBe(
+    "$env:CODEX_INSTALLER_URL='https://mirror.example.test/codex/install.ps1'; " +
+      "irm 'https://docs.example.test/root/install/codex.ps1' | iex",
+  );
+});
+
 test("Shell configuration safely quotes the selected credential, URL, and language", () => {
   expect(
     buildShellInstallCommand({

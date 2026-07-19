@@ -12,33 +12,47 @@ const developerInstructions: Record<CodexLanguage, string> = {
   "zh-cn": "请默认使用简体中文回答，除非用户明确要求其他语言。",
 };
 
-export function buildShellDefaultInstallCommand(installerOrigin: string) {
+export function buildShellDefaultInstallCommand(installerOrigin: string, installerUrlOverride?: string) {
   const scriptUrl = installerUrl(installerOrigin, "codex.sh");
-  return `curl -fsSL ${quoteShellArgument(scriptUrl)} | sh`;
+  const override = installerUrlOverride
+    ? `CODEX_INSTALLER_URL=${quoteShellArgument(installerUrlOverride)} `
+    : "";
+  return `curl -fsSL ${quoteShellArgument(scriptUrl)} | ${override}sh`;
 }
 
-export function buildPowerShellDefaultInstallCommand(installerOrigin: string) {
+export function buildPowerShellDefaultInstallCommand(
+  installerOrigin: string,
+  installerUrlOverride?: string,
+) {
   const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
-  return `irm ${quotePowerShellArgument(scriptUrl)} | iex`;
+  const override = installerUrlOverride
+    ? `$env:CODEX_INSTALLER_URL=${quotePowerShellArgument(installerUrlOverride)}; `
+    : "";
+  return `${override}irm ${quotePowerShellArgument(scriptUrl)} | iex`;
 }
 
 export function buildShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
+  installerUrlOverride,
   language,
   model,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
+  installerUrlOverride?: string;
   language: CodexLanguage;
   model: string;
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.sh");
+  const override = installerUrlOverride
+    ? `CODEX_INSTALLER_URL=${quoteShellArgument(installerUrlOverride)} `
+    : "";
 
   return (
-    `curl -fsSL ${quoteShellArgument(scriptUrl)} | sh -s -- ` +
+    `curl -fsSL ${quoteShellArgument(scriptUrl)} | ${override}sh -s -- ` +
     "--eggai " +
     `--sk-key ${quoteShellArgument(apiKey)} ` +
     `--baseurl ${quoteShellArgument(baseUrl)} ` +
@@ -51,19 +65,24 @@ export function buildPowerShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
+  installerUrlOverride,
   language,
   model,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
+  installerUrlOverride?: string;
   language: CodexLanguage;
   model: string;
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
+  const override = installerUrlOverride
+    ? `$env:CODEX_INSTALLER_URL=${quotePowerShellArgument(installerUrlOverride)}; `
+    : "";
 
   return (
-    `$env:EGGAI_CODEX_ENV_SCOPE='User'; ` +
+    `${override}$env:EGGAI_CODEX_ENV_SCOPE='User'; ` +
     `& ([scriptblock]::Create((irm ${quotePowerShellArgument(scriptUrl)}))) ` +
     `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} ` +
     `-BaseUrl ${quotePowerShellArgument(baseUrl)} ` +

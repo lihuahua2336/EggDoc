@@ -112,13 +112,17 @@ function runWithInstallerFixture(
     fakeCurl,
     `#!/bin/sh
 output=""
+url=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -o) output="$2"; shift 2 ;;
+    --) url="$2"; shift 2 ;;
+    http://*|https://*) url="$1"; shift ;;
     *) shift ;;
   esac
 done
 [ -z "\${FAKE_CURL_EXIT:-}" ] || exit "$FAKE_CURL_EXIT"
+[ "\${url%/models}" = "$url" ] || { printf '%s' "\${FAKE_MODELS_STATUS:-200}"; exit 0; }
 [ -n "$output" ] || exit 2
 cat "$FAKE_INSTALLER_SOURCE" > "$output"
 `,
@@ -233,6 +237,19 @@ test("default installation rejects invalid responses and preserves installer fai
   expect(failed.result.stderr).toContain("official Codex installer did not complete successfully");
   expect(failed.result.stdout).not.toContain("Done: Codex is installed");
   expect(failed.remainingTemporaryFiles).toEqual([]);
+});
+
+test("EggAi installation verifies the endpoint before downloading the official installer", () => {
+  const failed = runWithInstallerFixture(successfulInstaller, {
+    args: ["--eggai", "--sk-key", "sk-EGGDOC-SHELL-ENDPOINT-FAILURE"],
+    extraEnv: { FAKE_MODELS_STATUS: "503" },
+  });
+
+  expect(failed.result.status).not.toBe(0);
+  expect(failed.result.stderr).toContain("EggAi Codex endpoint verification returned HTTP 503");
+  expect(failed.result.stdout).toContain("Verifying the EggAi Codex endpoint");
+  expect(failed.result.stdout).not.toContain("Installing or updating Codex");
+  expect(failed.installedCodex).toBe(false);
 });
 
 test("EggAi installation configures provider-scoped authentication without changing Codex login", () => {

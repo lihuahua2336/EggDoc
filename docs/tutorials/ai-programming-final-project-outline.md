@@ -333,8 +333,8 @@ Prompt：
 - 支持 language：zh-cn 或 en-us
 - 支持 dry-run
 - dry-run 只输出计划，不安装、不写文件、不登录
-- 真实执行时更新 ~/.codex/config.toml，并调用 codex login --with-api-key
-- Windows 脚本需要检查 winget，缺失时尝试修复，失败时给出明确错误
+- 真实执行时先验证 EggAi `/models`，再更新 `~/.codex/config.toml` 和 provider-scoped `EGGAI_API_KEY`，不调用 `codex login`
+- Windows 脚本仅在提供精确 Package ID 时使用 winget；失败后回退官方安装器，并给出明确错误
 ```
 
 概念穿插：

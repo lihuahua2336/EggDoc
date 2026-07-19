@@ -71,7 +71,7 @@ function runWithInstallerFixture(
 
   const command = [
     "function global:Invoke-WebRequest {",
-    "  param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing, [string]$Method, $Headers, [string]$Body, [string]$ContentType)",
+    "  param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing, [string]$Method, $Headers, [string]$Body, [string]$ContentType, [int]$TimeoutSec)",
     "  if ($Uri -like '*/v1/messages') {",
     "    if ($env:FAKE_GATEWAY_STATUS -and $env:FAKE_GATEWAY_STATUS -ne '200') { throw \"gateway returned $env:FAKE_GATEWAY_STATUS\" }",
     "    $content = if ($env:FAKE_GATEWAY_BODY) { $env:FAKE_GATEWAY_BODY } else { \"event: message_start`ndata: {`\"type`\":`\"message_start`\",`\"message`\":{`\"id`\":`\"msg_fixture`\"}}`n`nevent: content_block_start`ndata: {`\"type`\":`\"content_block_start`\",`\"content_block`\":{`\"type`\":`\"tool_use`\",`\"name`\":`\"eggdoc_check`\"}}`n`nevent: message_stop`ndata: {`\"type`\":`\"message_stop`\"}\" }",
@@ -163,6 +163,15 @@ test("Claude Code PowerShell dry-run delegates installation without changing con
   expect(result.stdout).toContain("Official installer URL: https://claude.ai/install.ps1");
   expect(result.stdout).toContain("Would install/update Claude Code: yes");
   expect(result.stdout).toContain("Would modify Claude Code configuration: no");
+});
+
+test("Claude Code PowerShell rejects an invalid EggAi gateway timeout", () => {
+  const result = runPowerShell(["-File", scriptPath, "-DryRun", "-EggAi"], {
+    EGGDOC_GATEWAY_TIMEOUT_SECONDS: "0",
+  });
+
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toContain("EGGDOC_GATEWAY_TIMEOUT_SECONDS must be a positive integer");
 });
 
 test("Claude Code PowerShell EggAi dry-run validates inputs and redacts the credential", () => {

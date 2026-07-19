@@ -16,6 +16,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $OfficialInstallerUrl = if ($env:CLAUDE_CODE_INSTALLER_URL) { $env:CLAUDE_CODE_INSTALLER_URL } else { "https://claude.ai/install.ps1" }
+$GatewayTimeoutSeconds = if ($env:EGGDOC_GATEWAY_TIMEOUT_SECONDS) { $env:EGGDOC_GATEWAY_TIMEOUT_SECONDS } else { "60" }
 if ([string]::IsNullOrWhiteSpace($Version)) {
   $Version = if ($env:CLAUDE_CODE_VERSION) { $env:CLAUDE_CODE_VERSION } else { "latest" }
 }
@@ -177,6 +178,11 @@ if ($Version -ne "latest" -and $Version -ne "stable" -and $Version -notmatch "^\
   Throw-InstallError "version must be latest, stable, or a numeric dotted version."
 }
 
+$parsedGatewayTimeoutSeconds = 0
+if (-not [int]::TryParse([string]$GatewayTimeoutSeconds, [ref]$parsedGatewayTimeoutSeconds) -or $parsedGatewayTimeoutSeconds -lt 1) {
+  Throw-InstallError "EGGDOC_GATEWAY_TIMEOUT_SECONDS must be a positive integer."
+}
+$GatewayTimeoutSeconds = $parsedGatewayTimeoutSeconds
 $anthropicBaseUrl = if ($EggAiMode) { Get-AnthropicBaseUrl $BaseUrl } else { $null }
 if ($EggAiMode -and [string]::IsNullOrWhiteSpace($Sk_Key)) {
   Throw-InstallError "sk-key is required with EggAi mode. Set SK_KEY, EGGAI_API_KEY, or pass -SkKey."
@@ -211,6 +217,7 @@ if ($DryRun) {
     Write-Host "Sonnet model: $SonnetModel"
     Write-Host "Haiku model: $HaikuModel"
     Write-Host "Fable model: $FableModel"
+    Write-Host "Gateway timeout: $($GatewayTimeoutSeconds)s"
     Write-Host "API key: provided (redacted)"
     Write-Host "Would modify Claude Code configuration: yes"
   } else {
@@ -240,6 +247,7 @@ if ($EggAiMode) {
       -Headers @{ Authorization = "Bearer $Sk_Key"; "anthropic-version" = "2023-06-01" } `
       -ContentType "application/json" `
       -Body $gatewayBody `
+      -TimeoutSec $GatewayTimeoutSeconds `
       -UseBasicParsing
     if ([int]$gatewayResponse.StatusCode -lt 200 -or [int]$gatewayResponse.StatusCode -ge 300) {
       Throw-InstallError "gateway verification returned HTTP $($gatewayResponse.StatusCode)."
@@ -282,7 +290,7 @@ $temporaryInstaller = Join-Path (Get-TemporaryDirectory) "eggdoc-claude-code-$([
 try {
   Write-Host "Installing or updating Claude Code from Anthropic..."
   try {
-    Invoke-WebRequest -Uri $OfficialInstallerUrl -OutFile $temporaryInstaller -UseBasicParsing
+    Invoke-WebRequest -Uri $OfficialInstallerUrl -OutFile $temporaryInstaller -TimeoutSec 300 -UseBasicParsing
   } catch {
     Throw-InstallError "could not download the Anthropic installer: $($_.Exception.Message) Check network and region availability."
   }

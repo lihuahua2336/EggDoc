@@ -219,9 +219,9 @@ The scripts should accept:
 
 The Linux script should be usable through `curl -fsSL ... | sh -s -- ...`.
 
-The Windows script should be usable through `irm ... | iex`. It should check whether `winget` is available, try to repair App Installer when `winget` is missing, report a clear error when repair fails, then install or update Codex and write the EggAi Codex configuration.
+The Windows script should be usable through `irm ... | iex`. It should use an exact `winget` package ID only when one is supplied, otherwise use the official installer, and fall back to the official installer after a package-manager failure. It must verify the selected EggAi `/models` endpoint before writing configuration.
 
-Both scripts should update `~/.codex/config.toml` and use Codex's own API-key login flow to update `~/.codex/auth.json`, rather than asking readers to hand-edit secrets.
+Both scripts update `~/.codex/config.toml` with `model_provider = "eggai"`, the exact selected `model`, and `env_key = "EGGAI_API_KEY"`. They persist the key through a restricted environment file/profile on Unix or a user-scoped environment variable on Windows. They do not run a global Codex login flow or modify `auth.json`.
 
 ## Visual Direction
 

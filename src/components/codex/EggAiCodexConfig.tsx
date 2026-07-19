@@ -21,6 +21,7 @@ import { useEggAiApiAccount } from "@/components/codex/useEggAiApiAccount";
 import {
   CONFIGURATION_PLACEHOLDER,
   DEFAULT_CODEX_LANGUAGE,
+  PUBLIC_CODEX_INSTALLER_URL,
   PUBLIC_EGGAI_BASE_URL,
   PUBLIC_INSTALLER_ORIGIN,
 } from "@/config/public";
@@ -208,14 +209,15 @@ export function EggAiCodexConfig() {
 
   const officialCommand =
     platform === "windows"
-      ? buildPowerShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN)
-      : buildShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN);
+      ? buildPowerShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN, PUBLIC_CODEX_INSTALLER_URL)
+      : buildShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN, PUBLIC_CODEX_INSTALLER_URL);
   const buildEggAiCommand = (key: string) =>
     platform === "windows"
       ? buildPowerShellInstallCommand({
           apiKey: key,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
+          installerUrlOverride: PUBLIC_CODEX_INSTALLER_URL,
           language: DEFAULT_CODEX_LANGUAGE,
           model: commandModel,
         })
@@ -223,6 +225,7 @@ export function EggAiCodexConfig() {
           apiKey: key,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
+          installerUrlOverride: PUBLIC_CODEX_INSTALLER_URL,
           language: DEFAULT_CODEX_LANGUAGE,
           model: commandModel,
         });

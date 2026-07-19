@@ -5,6 +5,7 @@ umask 077
 OFFICIAL_INSTALLER_URL="${CLAUDE_CODE_INSTALLER_URL:-https://claude.ai/install.sh}"
 INSTALL_TARGET="${CLAUDE_CODE_VERSION:-latest}"
 DRY_RUN="${DRY_RUN:-0}"
+GATEWAY_TIMEOUT_SECONDS="${EGGDOC_GATEWAY_TIMEOUT_SECONDS:-60}"
 BASE_URL="${BASE_URL:-https://api.eggai.icu/v1}"
 SK_KEY="${SK_KEY:-${EGGAI_API_KEY:-}}"
 MODEL="${MODEL:-${ANTHROPIC_MODEL:-}}"
@@ -39,7 +40,7 @@ Options:
 Environment variables are also supported:
   CLAUDE_CODE_VERSION, CLAUDE_CODE_INSTALLER_URL, CLAUDE_HOME, SK_KEY, EGGAI_API_KEY,
   BASE_URL, MODEL, ANTHROPIC_MODEL, OPUS_MODEL, SONNET_MODEL, HAIKU_MODEL, FABLE_MODEL,
-  DRY_RUN
+  EGGDOC_GATEWAY_TIMEOUT_SECONDS, DRY_RUN
 EOF
 }
 
@@ -130,6 +131,10 @@ case "$DRY_RUN" in
   *) fail "DRY_RUN must be 1 or 0." ;;
 esac
 
+case "$GATEWAY_TIMEOUT_SECONDS" in
+  ''|*[!0-9]*|0) fail "EGGDOC_GATEWAY_TIMEOUT_SECONDS must be a positive integer." ;;
+esac
+
 valid_install_target "$INSTALL_TARGET" || \
   fail "version must be latest, stable, or a numeric dotted version."
 
@@ -187,6 +192,7 @@ if [ "$DRY_RUN" = "1" ]; then
     echo "Sonnet model: $SONNET_MODEL"
     echo "Haiku model: $HAIKU_MODEL"
     echo "Fable model: $FABLE_MODEL"
+    echo "Gateway timeout: ${GATEWAY_TIMEOUT_SECONDS}s"
     echo "API key: provided (redacted)"
     echo "Would modify Claude Code configuration: yes"
   else
@@ -263,6 +269,7 @@ if [ "$EGGAI_MODE" = "1" ]; then
   echo "Verifying the EggAi Claude gateway..."
   VERIFY_BODY="{\"model\":\"$MODEL\",\"max_tokens\":16,\"stream\":true,\"tools\":[{\"name\":\"eggdoc_check\",\"description\":\"Verify tool use\",\"input_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}}],\"tool_choice\":{\"type\":\"tool\",\"name\":\"eggdoc_check\"},\"messages\":[{\"role\":\"user\",\"content\":\"Run the check tool.\"}]}"
   if ! HTTP_STATUS="$(curl -sS -o "$VERIFY_FILE" -w '%{http_code}' \
+    --retry 2 --connect-timeout 15 --max-time "$GATEWAY_TIMEOUT_SECONDS" \
     -X POST "$ANTHROPIC_BASE_URL/v1/messages" \
     -H "Authorization: Bearer $SK_KEY" \
     -H "anthropic-version: 2023-06-01" \

@@ -144,8 +144,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 | `EGGDOC_EGGAI_ECOSYSTEM_URL` | 服务端 | EggAi Ecosystem API 根地址 |
 | `PUBLIC_EGGAI_BASE_URL` | 公开 | 生成集成配置时使用的默认 API Base URL |
 | `PUBLIC_INSTALLER_ORIGIN` | 公开 | 托管安装脚本的站点 Origin |
+| `PUBLIC_CODEX_INSTALLER_URL` | 公开，可选 | Codex 官方安装器的中国可达镜像 URL，注入生成命令的 `CODEX_INSTALLER_URL` |
+| `PUBLIC_CLAUDE_CODE_INSTALLER_URL` | 公开，可选 | Claude Code 官方安装器的中国可达镜像 URL，注入生成命令的 `CLAUDE_CODE_INSTALLER_URL` |
 
 前缀为 `PUBLIC_` 的值会进入客户端构建，不能包含秘密。服务端变量缺失或格式无效时，公开教程仍可访问，但认证和个性化配置接口会降级为不可用状态。
+
+中国大陆部署时，应优先把 `PUBLIC_INSTALLER_ORIGIN` 配置为用户可访问的自定义域名；如果官方安装器域名不可达，再配置上面两个可选镜像变量。EggAi 模式会直接验证 EggAi 端点，不依赖官方账户登录或官方账户 API 网络。
 
 ## 常用命令
 

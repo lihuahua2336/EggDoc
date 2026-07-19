@@ -134,7 +134,11 @@ exit /b 0\r
 
   const command = [
     "function global:Invoke-WebRequest {",
-    "  param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing)",
+    "  param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing, [string]$Method, $Headers, [int]$TimeoutSec)",
+    "  if ($Uri -like '*/models') {",
+    "    $status = if ($env:FAKE_MODELS_STATUS) { [int]$env:FAKE_MODELS_STATUS } else { 200 }",
+    "    return [pscustomobject]@{ StatusCode = $status }",
+    "  }",
     "  Copy-Item -LiteralPath $env:EGGDOC_CODEX_INSTALLER_FIXTURE -Destination $OutFile -Force",
     "}",
     "function global:Add-AppxPackage { throw 'App Installer changes are disabled in this fixture.' }",
@@ -297,6 +301,18 @@ test("official installer rejects empty and HTML responses", () => {
   expect(html.result.stderr).toContain("returned HTML instead of a script");
   expect(empty.remainingTemporaryFiles).toEqual([]);
   expect(html.remainingTemporaryFiles).toEqual([]);
+});
+
+test("EggAi installation verifies the endpoint before downloading the official installer", () => {
+  const failed = runWithInstallerFixture(undefined, "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-ENDPOINT-FAILURE'", {
+    extraEnv: { FAKE_MODELS_STATUS: "503" },
+  });
+
+  expect(failed.result.status).not.toBe(0);
+  expect(failed.result.stderr).toContain("EggAi Codex endpoint verification returned HTTP 503");
+  expect(failed.result.stdout).toContain("Verifying the EggAi Codex endpoint");
+  expect(failed.result.stdout).not.toContain("Installing or updating Codex");
+  expect(failed.codexCommands).toBe("");
 });
 
 test("EggAi installation configures provider-scoped authentication without changing Codex login", () => {

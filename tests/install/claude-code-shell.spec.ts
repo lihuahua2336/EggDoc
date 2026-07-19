@@ -175,6 +175,15 @@ test("Claude Code Shell dry-run delegates installation without changing configur
   expect(result.stdout).toContain("Would modify Claude Code configuration: no");
 });
 
+test("Claude Code Shell rejects an invalid EggAi gateway timeout", () => {
+  const result = runShell(["--dry-run", "--eggai"], {
+    EGGDOC_GATEWAY_TIMEOUT_SECONDS: "0",
+  });
+
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toContain("EGGDOC_GATEWAY_TIMEOUT_SECONDS must be a positive integer");
+});
+
 test("Claude Code Shell EggAi dry-run validates inputs and redacts the credential", () => {
   const result = runShell([
     "--dry-run",

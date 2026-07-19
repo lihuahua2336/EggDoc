@@ -32,12 +32,14 @@ if ([string]::IsNullOrWhiteSpace($CodexPackage)) {
   $CodexPackage = $env:CODEX_PACKAGE_ID
 }
 $EnvironmentScope = if ($env:EGGAI_CODEX_ENV_SCOPE) { $env:EGGAI_CODEX_ENV_SCOPE } else { "User" }
+$GatewayTimeoutSeconds = if ($env:EGGDOC_GATEWAY_TIMEOUT_SECONDS) { $env:EGGDOC_GATEWAY_TIMEOUT_SECONDS } else { "60" }
 $EggAiMode = $EggAi.IsPresent
 
 function Write-Step {
   param([string]$Key)
 
   switch ($Key) {
+    "verify" { Write-Host "Verifying the EggAi Codex endpoint..." }
     "winget" { Write-Host "Installing or updating Codex with an exact winget package ID..." }
     "official" { Write-Host "Installing or updating Codex with the official Codex CLI installer..." }
     "config" { Write-Host "Writing EggAi Codex configuration..." }
@@ -59,6 +61,30 @@ function Get-WingetCommand {
 
 function Get-CodexCommand {
   Get-Command codex -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
+function Test-EggAiCodexEndpoint {
+  param(
+    [string]$ProviderBaseUrl,
+    [string]$ApiKey
+  )
+
+  try {
+    $response = Invoke-WebRequest `
+      -Uri "$($ProviderBaseUrl.TrimEnd('/'))/models" `
+      -Method Get `
+      -Headers @{ Authorization = "Bearer $ApiKey" } `
+      -TimeoutSec $GatewayTimeoutSeconds `
+      -UseBasicParsing
+    if ([int]$response.StatusCode -lt 200 -or [int]$response.StatusCode -ge 300) {
+      Throw-InstallError "EggAi Codex endpoint verification returned HTTP $($response.StatusCode)."
+    }
+  } catch {
+    if ($_.Exception.Message -like "EggAi Codex installer failed:*") {
+      throw
+    }
+    Throw-InstallError "could not verify the EggAi Codex endpoint: $($_.Exception.Message)"
+  }
 }
 
 function Get-TemporaryDirectory {
@@ -122,7 +148,7 @@ function Install-CodexWithOfficialInstaller {
   $temporaryInstaller = Join-Path (Get-TemporaryDirectory) "eggdoc-codex-$([guid]::NewGuid()).ps1"
   try {
     try {
-      Invoke-WebRequest -Uri $OfficialInstallerUrl -OutFile $temporaryInstaller -UseBasicParsing
+      Invoke-WebRequest -Uri $OfficialInstallerUrl -OutFile $temporaryInstaller -TimeoutSec 300 -UseBasicParsing
     } catch {
       Throw-InstallError "could not download the official Codex installer: $($_.Exception.Message)"
     }
@@ -223,6 +249,7 @@ function Write-DryRunPlan {
   }
   Write-Host "Would write config.toml: yes"
   Write-Host "Would save EGGAI_API_KEY for provider-scoped authentication: yes"
+  Write-Host "Would verify EggAi endpoint before installation: yes"
   Write-Host "Environment scope: $EnvironmentScope"
   Write-Host "Would change existing Codex login: no"
   Write-Host "Managed config preview:"
@@ -524,6 +551,11 @@ if (-not [string]::IsNullOrWhiteSpace($CodexPackage) -and $CodexPackage -notmatc
 if ($EggAiMode -and $EnvironmentScope -ne "Process" -and $EnvironmentScope -ne "User") {
   Throw-InstallError "EGGAI_CODEX_ENV_SCOPE must be Process or User."
 }
+$parsedGatewayTimeoutSeconds = 0
+if (-not [int]::TryParse([string]$GatewayTimeoutSeconds, [ref]$parsedGatewayTimeoutSeconds) -or $parsedGatewayTimeoutSeconds -lt 1) {
+  Throw-InstallError "EGGDOC_GATEWAY_TIMEOUT_SECONDS must be a positive integer."
+}
+$GatewayTimeoutSeconds = $parsedGatewayTimeoutSeconds
 
 $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
 $configFile = Join-Path $codexHome "config.toml"
@@ -535,6 +567,10 @@ if ($DryRun) {
 
 if ($EggAiMode -and [string]::IsNullOrWhiteSpace($Sk_Key)) {
   Throw-InstallError "sk-key is required with EggAi mode. Set SK_KEY, EGGAI_API_KEY, or pass -SkKey."
+}
+if ($EggAiMode) {
+  Write-Step "verify"
+  Test-EggAiCodexEndpoint -ProviderBaseUrl $BaseUrl -ApiKey $Sk_Key
 }
 
 $wingetInstallSucceeded = $false

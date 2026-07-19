@@ -73,6 +73,8 @@ EggAi 模型参数包含 `claude-haiku-4-5`，因此 Haiku 角色直接使用该
 
 写入设置前，脚本会使用所选 API 地址、API Key 和主模型发送一次流式工具调用请求。只有 EggAi 网关返回有效的 Anthropic Messages 流式响应后，脚本才会继续安装和修改配置。
 
+网关检查默认最多等待 60 秒，可通过 `EGGDOC_GATEWAY_TIMEOUT_SECONDS` 调整。Shell 使用标准代理环境变量；Windows 使用系统/WinHTTP 代理。检查只验证 EggAi 网关，不会尝试 Anthropic 官方账户登录。
+
 这项检查验证主模型、鉴权、流式响应和工具调用通路。其他模型角色依据 EggAi 返回的模型列表进行映射，不会在安装时分别发送请求。
 
 ## 重复配置

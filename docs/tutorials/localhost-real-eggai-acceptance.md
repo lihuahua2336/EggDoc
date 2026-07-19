@@ -29,6 +29,8 @@ Copy `.env.example` to the ignored `.env.local` file and replace the deployment-
 | `EGGDOC_EGGAI_ECOSYSTEM_URL` | Yes | Server-facing origin that exposes the three `/api/ecosystem/*` routes. |
 | `PUBLIC_EGGAI_BASE_URL` | Optional | Public OpenAI-compatible API base URL used when an EggAi API Credential omits `base_url`. |
 | `PUBLIC_INSTALLER_ORIGIN` | Optional | Public origin that hosts `/install/codex.sh` and `/install/codex.ps1`. |
+| `PUBLIC_CODEX_INSTALLER_URL` | Optional | China-accessible Codex upstream installer mirror injected into generated commands. |
+| `PUBLIC_CLAUDE_CODE_INSTALLER_URL` | Optional | China-accessible Claude Code upstream installer mirror injected into generated commands. |
 
 Generate a localhost-only Session secret with Node.js:
 

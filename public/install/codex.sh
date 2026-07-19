@@ -8,6 +8,7 @@ SK_KEY="${SK_KEY:-${EGGAI_API_KEY:-}}"
 LANGUAGE="${LANGUAGE:-zh-cn}"
 MODEL="${MODEL:-${CODEX_MODEL:-}}"
 DRY_RUN="${DRY_RUN:-0}"
+GATEWAY_TIMEOUT_SECONDS="${EGGDOC_GATEWAY_TIMEOUT_SECONDS:-60}"
 EGGAI_MODE=0
 OFFICIAL_INSTALLER_URL="${CODEX_INSTALLER_URL:-https://chatgpt.com/codex/install.sh}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
@@ -32,7 +33,7 @@ Options:
 Environment variables are also supported:
   SK_KEY, EGGAI_API_KEY, BASE_URL, LANGUAGE, MODEL, CODEX_HOME,
   CODEX_INSTALL_DIR, CODEX_INSTALLER_URL, CODEX_NON_INTERACTIVE, CODEX_PROFILE,
-  DRY_RUN
+  EGGDOC_GATEWAY_TIMEOUT_SECONDS, DRY_RUN
 EOF
 }
 
@@ -95,6 +96,7 @@ done
 
 say() {
   case "$1" in
+    verify) echo "Verifying the EggAi Codex endpoint..." ;;
     install) echo "Installing or updating Codex..." ;;
     config) echo "Writing EggAi Codex configuration..." ;;
     env) echo "Saving EggAi API key for provider-scoped authentication..." ;;
@@ -121,6 +123,10 @@ case "$EGGAI_MODE" in
   *) fail "EGGAI_MODE must be 1 or 0." ;;
 esac
 
+case "$GATEWAY_TIMEOUT_SECONDS" in
+  ''|*[!0-9]*|0) fail "EGGDOC_GATEWAY_TIMEOUT_SECONDS must be a positive integer." ;;
+esac
+
 validate_base_url() {
   case "$1" in
     *[[:space:]]*|*[[:cntrl:]]*) fail "baseurl must not contain whitespace or control characters." ;;
@@ -145,6 +151,27 @@ validate_base_url() {
       fail "baseurl must include a host and must not contain user information."
       ;;
   esac
+}
+
+verify_eggai_codex_endpoint() {
+  models_url="${BASE_URL%/}/models"
+  if command -v curl >/dev/null 2>&1; then
+    if ! models_status="$(curl -sS --retry 2 --connect-timeout 15 --max-time "$GATEWAY_TIMEOUT_SECONDS" \
+      -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SK_KEY" -- "$models_url")"; then
+      fail "could not reach the EggAi Codex endpoint. Check the selected EggAi group, proxy, and network."
+    fi
+    case "$models_status" in
+      2??) ;;
+      *) fail "EggAi Codex endpoint verification returned HTTP $models_status. Check the selected EggAi group and API key." ;;
+    esac
+  elif command -v wget >/dev/null 2>&1; then
+    if ! wget -q --timeout="$GATEWAY_TIMEOUT_SECONDS" --tries=3 \
+      --header="Authorization: Bearer $SK_KEY" -O /dev/null "$models_url"; then
+      fail "could not verify the EggAi Codex endpoint. Check the selected EggAi group, proxy, and network."
+    fi
+  else
+    fail "curl or wget is required to verify the EggAi Codex endpoint."
+  fi
 }
 
 if [ "$EGGAI_MODE" = "1" ]; then
@@ -225,6 +252,7 @@ print_plan() {
   echo "API key: $api_key_status"
   echo "Would write config.toml: yes"
   echo "Would save EGGAI_API_KEY for provider-scoped authentication: yes"
+  echo "Would verify EggAi endpoint before installation: yes"
   echo "Would change existing Codex login: no"
   echo "Shell profile: $(select_shell_profile)"
   echo "Managed config preview:"
@@ -252,6 +280,8 @@ fi
 
 if [ "$EGGAI_MODE" = "1" ]; then
   [ -n "$SK_KEY" ] || fail "sk-key is required with --eggai. Pass --sk-key or set SK_KEY."
+  say verify
+  verify_eggai_codex_endpoint
 fi
 
 command -v mktemp >/dev/null 2>&1 || fail "mktemp is required."
