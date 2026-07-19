@@ -74,6 +74,7 @@ function runWithInstallerFixture(
     args?: string[];
     extraEnv?: NodeJS.ProcessEnv;
     initialConfig?: string;
+    initialEnvironment?: string;
     profileAsDirectory?: boolean;
     removeBackupAfterFirstRun?: boolean;
     runs?: number;
@@ -100,6 +101,10 @@ function runWithInstallerFixture(
   if (options.initialConfig !== undefined) {
     mkdirSync(codexHome, { recursive: true });
     writeFileSync(configPath, options.initialConfig);
+  }
+  if (options.initialEnvironment !== undefined) {
+    mkdirSync(codexHome, { recursive: true });
+    writeFileSync(environmentPath, options.initialEnvironment);
   }
 
   const fakeCurl = path.join(bin, "curl");
@@ -311,7 +316,23 @@ test("EggAi installation restores existing configuration when API key persistenc
   expect(configured.result.stdout).not.toContain("installed and configured to use EggAi");
   expect(configured.config).toBe(initialConfig);
   expect(configured.backup).toBe(initialConfig);
+  expect(configured.environment).toBeUndefined();
   expect(configured.codexCommands).not.toContain("login");
+  expect(configured.remainingTemporaryFiles).toEqual([]);
+});
+
+test("EggAi installation preserves an existing API key when profile persistence fails", () => {
+  const previousEnvironment = "# existing\nEGGAI_API_KEY='sk-EGGDOC-SHELL-PREVIOUS'\nexport EGGAI_API_KEY\n";
+  const configured = runWithInstallerFixture(successfulInstaller, {
+    args: ["--eggai", "--sk-key", "sk-EGGDOC-SHELL-NEW"],
+    initialEnvironment: previousEnvironment,
+    profileAsDirectory: true,
+  });
+
+  expect(configured.result.status).not.toBe(0);
+  expect(configured.result.stderr).toContain("could not save EGGAI_API_KEY");
+  expect(configured.environment).toBe(previousEnvironment);
+  expect(configured.config).toBeUndefined();
   expect(configured.remainingTemporaryFiles).toEqual([]);
 });
 

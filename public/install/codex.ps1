@@ -31,6 +31,7 @@ if ([string]::IsNullOrWhiteSpace($Model)) {
 if ([string]::IsNullOrWhiteSpace($CodexPackage)) {
   $CodexPackage = $env:CODEX_PACKAGE_ID
 }
+$EnvironmentScope = if ($env:EGGAI_CODEX_ENV_SCOPE) { $env:EGGAI_CODEX_ENV_SCOPE } else { "User" }
 $EggAiMode = $EggAi.IsPresent
 
 function Write-Step {
@@ -53,7 +54,11 @@ function Throw-InstallError {
 }
 
 function Get-WingetCommand {
-  Get-Command winget -ErrorAction SilentlyContinue
+  Get-Command winget -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
+function Get-CodexCommand {
+  Get-Command codex -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
 function Get-TemporaryDirectory {
@@ -176,7 +181,7 @@ function Write-DryRunPlan {
 
   $winget = if ([string]::IsNullOrWhiteSpace($CodexPackage)) { $null } else { Get-WingetCommand }
   Add-CodexBinToPath
-  $codex = Get-Command codex -ErrorAction SilentlyContinue
+  $codex = Get-CodexCommand
 
   Write-Host "Codex installer dry run"
   Write-Host "Mode: $(if ($EggAiMode) { 'eggai' } else { 'default' })"
@@ -218,6 +223,7 @@ function Write-DryRunPlan {
   }
   Write-Host "Would write config.toml: yes"
   Write-Host "Would save EGGAI_API_KEY for provider-scoped authentication: yes"
+  Write-Host "Environment scope: $EnvironmentScope"
   Write-Host "Would change existing Codex login: no"
   Write-Host "Managed config preview:"
   Write-Host "# >>> eggai-codex"
@@ -291,7 +297,7 @@ function Update-CodexConfig {
       continue
     }
 
-    if (-not $seenTable -and $line -match '^\s*(developer_instructions|model_provider|model_providers\.eggai)\s*=') {
+    if (-not $seenTable -and $line -match '^\s*(developer_instructions|model_provider|model_providers\s*\.\s*(?:"eggai"|''eggai''|eggai))\s*=') {
       continue
     }
 
@@ -406,23 +412,79 @@ function Restore-CodexConfig {
   }
 }
 
-function Set-EggAiApiKey {
-  param([string]$ApiKey)
+function Get-EnvironmentVariableState {
+  param([EnvironmentVariableTarget]$Target)
 
-  $targetName = if ($env:EGGDOC_CODEX_ENV_SCOPE) { $env:EGGDOC_CODEX_ENV_SCOPE } else { "User" }
-  $target = switch ($targetName) {
+  $variables = [Environment]::GetEnvironmentVariables($Target)
+  $exists = $variables.Contains("EGGAI_API_KEY")
+  [pscustomobject]@{
+    Exists = $exists
+    Target = $Target
+    Value = if ($exists) { [string]$variables["EGGAI_API_KEY"] } else { $null }
+  }
+}
+
+function Restore-EnvironmentVariableState {
+  param($State)
+
+  $value = if ($State.Exists) { $State.Value } else { $null }
+  [Environment]::SetEnvironmentVariable("EGGAI_API_KEY", $value, $State.Target)
+}
+
+function Set-EggAiApiKey {
+  param(
+    [string]$ApiKey,
+    [string]$TargetName
+  )
+
+  $target = switch ($TargetName) {
     "Process" { [EnvironmentVariableTarget]::Process }
     "User" { [EnvironmentVariableTarget]::User }
-    default { Throw-InstallError "EGGDOC_CODEX_ENV_SCOPE must be Process or User." }
+    default { Throw-InstallError "EGGAI_CODEX_ENV_SCOPE must be Process or User." }
   }
 
-  [Environment]::SetEnvironmentVariable("EGGAI_API_KEY", $ApiKey, $target)
-  $savedKey = [Environment]::GetEnvironmentVariable("EGGAI_API_KEY", $target)
-  if ($savedKey -cne $ApiKey) {
-    Throw-InstallError "EGGAI_API_KEY could not be verified in the $targetName environment."
+  $targetState = Get-EnvironmentVariableState -Target $target
+  $processState = if ($target -eq [EnvironmentVariableTarget]::Process) {
+    $targetState
+  } else {
+    Get-EnvironmentVariableState -Target ([EnvironmentVariableTarget]::Process)
   }
-  $env:EGGAI_API_KEY = $ApiKey
-  $targetName
+
+  try {
+    [Environment]::SetEnvironmentVariable("EGGAI_API_KEY", $ApiKey, $target)
+    if ($target -ne [EnvironmentVariableTarget]::Process) {
+      [Environment]::SetEnvironmentVariable("EGGAI_API_KEY", $ApiKey, [EnvironmentVariableTarget]::Process)
+    }
+    if ($env:EGGDOC_TEST_FORCE_CODEX_ENV_VERIFY_FAILURE) {
+      Throw-InstallError "forced EGGAI_API_KEY verification failure."
+    }
+    $savedKey = [Environment]::GetEnvironmentVariable("EGGAI_API_KEY", $target)
+    $processKey = [Environment]::GetEnvironmentVariable("EGGAI_API_KEY", [EnvironmentVariableTarget]::Process)
+    if ($savedKey -cne $ApiKey -or $processKey -cne $ApiKey) {
+      Throw-InstallError "EGGAI_API_KEY could not be verified in the $TargetName environment."
+    }
+  } catch {
+    $writeError = $_
+    $restoreErrors = New-Object System.Collections.Generic.List[string]
+    try {
+      Restore-EnvironmentVariableState -State $targetState
+    } catch {
+      $restoreErrors.Add($_.Exception.Message)
+    }
+    if ($target -ne [EnvironmentVariableTarget]::Process) {
+      try {
+        Restore-EnvironmentVariableState -State $processState
+      } catch {
+        $restoreErrors.Add($_.Exception.Message)
+      }
+    }
+    if ($restoreErrors.Count -gt 0) {
+      Throw-InstallError "EGGAI_API_KEY could not be saved or fully restored: $($restoreErrors -join '; ')"
+    }
+    throw $writeError
+  }
+
+  $TargetName
 }
 
 if ($EggAiMode -and $Language -ne "zh-cn" -and $Language -ne "en-us") {
@@ -458,6 +520,9 @@ if ($EggAiMode) {
 }
 if (-not [string]::IsNullOrWhiteSpace($CodexPackage) -and $CodexPackage -notmatch '^[A-Za-z0-9._-]+$') {
   Throw-InstallError "CodexPackage must be an exact winget package ID."
+}
+if ($EggAiMode -and $EnvironmentScope -ne "Process" -and $EnvironmentScope -ne "User") {
+  Throw-InstallError "EGGAI_CODEX_ENV_SCOPE must be Process or User."
 }
 
 $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
@@ -499,13 +564,13 @@ if (-not [string]::IsNullOrWhiteSpace($CodexPackage)) {
 }
 
 Add-CodexBinToPath
-if (-not $wingetInstallSucceeded -or -not (Get-Command codex -ErrorAction SilentlyContinue)) {
+if (-not $wingetInstallSucceeded -or -not (Get-CodexCommand)) {
   Write-Step "official"
   Install-CodexWithOfficialInstaller
 }
 
 Add-CodexBinToPath
-$codexCommand = Get-Command codex -ErrorAction SilentlyContinue
+$codexCommand = Get-CodexCommand
 if (-not $codexCommand) {
   Throw-InstallError "Codex was installed, but the codex command is not on PATH. Restart PowerShell and retry."
 }
@@ -542,7 +607,7 @@ $configUpdate = Update-CodexConfig `
 
 Write-Step "env"
 try {
-  $environmentTarget = Set-EggAiApiKey -ApiKey $Sk_Key
+  $environmentTarget = Set-EggAiApiKey -ApiKey $Sk_Key -TargetName $EnvironmentScope
 } catch {
   $environmentError = $_.Exception.Message
   try {

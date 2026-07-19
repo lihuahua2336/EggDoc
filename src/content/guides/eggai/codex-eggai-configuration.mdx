@@ -1,71 +1,64 @@
 ---
 type: guide
 title: Codex EggAi 配置说明
-description: 了解 EggAi 安装模式写入的 Codex 配置、认证文件和备份处理方式。
+description: 了解 EggAi 安装模式写入的 Codex 提供方、模型、环境变量和备份处理方式。
 publishedAt: 2026-07-17
-updatedAt: 2026-07-17
+updatedAt: 2026-07-20
 tags: [codex, eggai, configuration]
 draft: false
 order: 20
 ---
 
-使用安装页中的 `EggAi 配置` 后，脚本会设置 Codex 的模型提供方，并让 Codex CLI 保存所选配置分组的 API Key。
+在安装页面选择 `EggAi 配置` 后，脚本会先验证所选 API 凭据和模型，再安装 Codex 并更新用户级配置。网页命令中的模型 ID 来自 EggAi `/models` 接口，不会猜测或硬编码一个不存在的模型。
 
 ## 配置文件
 
-默认配置目录是 `~/.codex`。Windows 对应 `$HOME\.codex`。如果设置了 `CODEX_HOME`，则使用该目录。
+默认配置目录是 `~/.codex`，Windows 对应 `$HOME\.codex`。设置 `CODEX_HOME` 后，脚本会使用该目录。
 
 | 文件 | 用途 |
 | --- | --- |
-| `config.toml` | 保存 EggAi 提供方、Base URL 和默认回复语言 |
-| `auth.json` | 由 Codex CLI 保存登录凭据 |
-| `config.toml.eggai.bak` | 脚本写入前创建的原配置备份 |
+| `config.toml` | 保存 EggAi 提供方、Base URL、模型和默认回复语言 |
+| `eggai.env` | macOS/Linux 保存 `EGGAI_API_KEY` 的受限权限文件 |
+| `config.toml.eggai.bak` | 配置发生变化时保留的原配置备份 |
 
 ## config.toml
 
-默认生成的 EggAi 配置如下：
+网页生成的配置形状如下，API Key 不会写进 TOML：
 
 ```toml
-cli_auth_credentials_store = "file"
 model_provider = "eggai"
 developer_instructions = "请默认使用简体中文回答，除非用户明确要求其他语言。"
+model = "gpt-5.2"
 
 [model_providers.eggai]
 name = "EggAi"
 base_url = "https://api.eggai.icu/v1"
+env_key = "EGGAI_API_KEY"
+env_key_instructions = "EggDoc stores EGGAI_API_KEY in the user environment."
 wire_api = "responses"
-requires_openai_auth = true
 ```
 
-- `cli_auth_credentials_store`：让 Codex CLI 使用本地文件保存登录凭据。
-- `model_provider`：把当前模型提供方切换为 EggAi。
-- `developer_instructions`：设置默认回复语言。
-- `base_url`：使用所选 EggAi 配置分组对应的 API 地址。
-- `wire_api`：使用 Responses API 协议。
-- `requires_openai_auth`：让该提供方读取 Codex 的登录凭据。
+- `model_provider` 选择 EggAi。
+- `model` 是 EggAi `/models` 返回的准确模型 ID。
+- `env_key` 告诉 Codex 从 `EGGAI_API_KEY` 环境变量读取凭据。
+- `wire_api` 使用 Responses API 协议。
+
+脚本不会执行 `codex login`，也不会创建或修改 `auth.json`，因此不会覆盖已有的 OpenAI/ChatGPT 登录状态。
 
 ## API Key
 
-API Key 不会写进 `config.toml`。安装脚本通过标准输入调用：
+macOS/Linux 会将密钥写入 `CODEX_HOME/eggai.env`，并在用户 shell profile 中维护受控加载块。Windows 默认写入当前用户环境变量。PowerShell 命令会显式设置：
 
-```sh
-codex login --with-api-key
+```powershell
+$env:EGGAI_CODEX_ENV_SCOPE = 'User'
 ```
 
-随后由 Codex CLI 将凭据保存到本地认证文件。不要分享 `auth.json`、完整安装命令、终端历史或包含 API Key 的截图。
+`User` 作用域会跨终端保存，`Process` 仅适合测试或临时会话。API Key 仍然会出现在一键命令中，请不要分享命令、终端历史、截图或配置目录。
 
 ## 重复配置
 
-每次运行 EggAi 配置前，脚本都会把当前 `config.toml` 备份为 `config.toml.eggai.bak`。然后删除旧的 EggAi 托管配置和旧的 `[model_providers.eggai]`，并替换顶层的 `cli_auth_credentials_store`、`model_provider` 和 `developer_instructions`。除这些项目外，其他原有配置会被保留。
+每次配置前，脚本会删除旧的 `[model_providers.eggai]` 及其所有子表，然后合并新的托管块，同时保留其他 Codex 设置。只有配置内容发生变化时才创建或更新 `.eggai.bak`；目标配置已是最新状态时不会重写备份。
 
-这意味着重复运行会更新 EggAi 配置，不会不断追加重复配置块。
-
-## 检查登录状态
-
-运行以下命令确认 Codex CLI 已读取认证信息：
-
-```sh
-codex login status
-```
+配置写入使用临时文件和原子替换。写入或环境变量验证失败时，脚本会恢复原配置；Windows 还会恢复原 `EGGAI_API_KEY` 的值及其是否存在状态。
 
 [返回 Codex 安装](/eggai/codex-installer/)

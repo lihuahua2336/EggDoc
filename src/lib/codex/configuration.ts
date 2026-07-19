@@ -1,4 +1,5 @@
 export const CODEX_LANGUAGES = ["zh-cn", "en-us"] as const;
+export const CODEX_MODEL_PLACEHOLDER = "gpt-EGGAI-MODEL-ID";
 
 export type CodexLanguage = (typeof CODEX_LANGUAGES)[number];
 
@@ -26,11 +27,13 @@ export function buildShellInstallCommand({
   baseUrl,
   installerOrigin,
   language,
+  model,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
   language: CodexLanguage;
+  model: string;
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.sh");
 
@@ -39,7 +42,8 @@ export function buildShellInstallCommand({
     "--eggai " +
     `--sk-key ${quoteShellArgument(apiKey)} ` +
     `--baseurl ${quoteShellArgument(baseUrl)} ` +
-    `--language ${quoteShellArgument(language)}`
+    `--language ${quoteShellArgument(language)} ` +
+    `--model ${quoteShellArgument(model)}`
   );
 }
 
@@ -48,41 +52,58 @@ export function buildPowerShellInstallCommand({
   baseUrl,
   installerOrigin,
   language,
+  model,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
   language: CodexLanguage;
+  model: string;
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
 
   return (
+    `$env:EGGAI_CODEX_ENV_SCOPE='User'; ` +
     `& ([scriptblock]::Create((irm ${quotePowerShellArgument(scriptUrl)}))) ` +
     `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} ` +
     `-BaseUrl ${quotePowerShellArgument(baseUrl)} ` +
-    `-Language ${quotePowerShellArgument(language)}`
+    `-Language ${quotePowerShellArgument(language)} ` +
+    `-Model ${quotePowerShellArgument(model)}`
   );
 }
 
 export function buildCodexConfigToml({
   baseUrl,
   language,
+  model,
 }: {
   baseUrl: string;
   language: CodexLanguage;
+  model: string;
 }) {
   return [
     "# EggAi Codex provider configuration. This file does not contain your API key.",
-    'cli_auth_credentials_store = "file"',
     'model_provider = "eggai"',
     `developer_instructions = "${escapeTomlBasicString(developerInstructions[language])}"`,
+    `model = "${escapeTomlBasicString(model)}"`,
     "",
     "[model_providers.eggai]",
     'name = "EggAi"',
     `base_url = "${escapeTomlBasicString(baseUrl)}"`,
+    'env_key = "EGGAI_API_KEY"',
+    'env_key_instructions = "EggDoc stores EGGAI_API_KEY in the user environment."',
     'wire_api = "responses"',
-    "requires_openai_auth = true",
   ].join("\n");
+}
+
+export function selectCodexModel(modelNames: string[]) {
+  const candidates = modelNames.filter((name) => {
+    const basename = name.toLowerCase().split("/").at(-1) ?? "";
+    return /^gpt-\d/.test(basename);
+  });
+  return [...candidates].sort((left, right) =>
+    right.localeCompare(left, undefined, { numeric: true, sensitivity: "base" }),
+  )[0];
 }
 
 function quoteShellArgument(value: string) {

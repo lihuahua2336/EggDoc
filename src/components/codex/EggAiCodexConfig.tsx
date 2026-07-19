@@ -25,11 +25,13 @@ import {
   PUBLIC_INSTALLER_ORIGIN,
 } from "@/config/public";
 import {
+  CODEX_MODEL_PLACEHOLDER,
   buildCodexConfigToml,
   buildPowerShellDefaultInstallCommand,
   buildPowerShellInstallCommand,
   buildShellDefaultInstallCommand,
   buildShellInstallCommand,
+  selectCodexModel,
 } from "@/lib/codex/configuration";
 
 type CopyStatus = "idle" | "copied" | "error";
@@ -193,9 +195,15 @@ export function EggAiCodexConfig() {
       : undefined;
   const apiKey = selectedCredential?.key ?? CONFIGURATION_PLACEHOLDER;
   const baseUrl = selectedCredential?.baseUrl ?? PUBLIC_EGGAI_BASE_URL;
+  const codexModel =
+    accountState.kind === "active"
+      ? selectCodexModel(accountState.modelSummary.names)
+      : undefined;
+  const commandModel = codexModel ?? CODEX_MODEL_PLACEHOLDER;
   const codexConfigToml = buildCodexConfigToml({
     baseUrl,
     language: DEFAULT_CODEX_LANGUAGE,
+    model: commandModel,
   });
 
   const officialCommand =
@@ -209,12 +217,14 @@ export function EggAiCodexConfig() {
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
           language: DEFAULT_CODEX_LANGUAGE,
+          model: commandModel,
         })
       : buildShellInstallCommand({
           apiKey: key,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
           language: DEFAULT_CODEX_LANGUAGE,
+          model: commandModel,
         });
   const eggAiPreview = buildEggAiCommand(apiKey);
   const commandPreview = mode === "official" ? officialCommand : eggAiPreview;
@@ -258,8 +268,12 @@ export function EggAiCodexConfig() {
           </select>
         </div>
         <p className="inline-flex items-center gap-2 pb-2 text-sm text-muted-foreground">
-          <CircleCheck aria-hidden="true" className="h-4 w-4 text-primary" />
-          已就绪
+          {codexModel ? (
+            <CircleCheck aria-hidden="true" className="h-4 w-4 text-primary" />
+          ) : (
+            <CircleAlert aria-hidden="true" className="h-4 w-4 text-destructive" />
+          )}
+          {codexModel ? `模型 ${codexModel}` : "暂无可用 GPT 模型"}
         </p>
       </div>
     );
@@ -362,7 +376,7 @@ export function EggAiCodexConfig() {
         <p className="text-sm leading-6 text-muted-foreground">
           {mode === "official"
             ? "无需登录。复制命令并在终端运行，只安装 Codex，不修改模型提供方。"
-            : "选择 EggAi 配置后，脚本会安装 Codex，并一次写好 config.toml 与 auth.json。"}
+            : "选择 EggAi 配置后，脚本会安装 Codex，并一次写好 config.toml 与 EGGAI_API_KEY 环境变量。"}
         </p>
 
         {mode === "eggai" && (
@@ -393,11 +407,11 @@ export function EggAiCodexConfig() {
         <QuickCopyCommand
           command={commandPreview}
           copyValue={commandCopyValue}
-          disabled={mode === "eggai" && !selectedCredential}
-          resetKey={`${mode}\u0000${platform}\u0000${apiKey}\u0000${baseUrl}`}
+          disabled={mode === "eggai" && (!selectedCredential || !codexModel)}
+          resetKey={`${mode}\u0000${platform}\u0000${apiKey}\u0000${baseUrl}\u0000${commandModel}`}
         />
 
-        {mode === "eggai" && selectedCredential && (
+        {mode === "eggai" && selectedCredential && codexModel && (
           <details className="group mt-4 border-t border-border pt-4">
             <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium">
               分别复制配置

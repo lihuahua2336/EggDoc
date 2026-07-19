@@ -90,6 +90,7 @@ function runWithInstallerFixture(
   const installerFixture = path.join(root, "installer.ps1");
   const wingetLog = path.join(root, "winget.log");
   const codexLog = path.join(root, "codex.log");
+  const environmentStateLog = path.join(root, "environment-state.log");
   const codexHome = path.join(home, ".codex");
   const configPath = path.join(codexHome, "config.toml");
   const backupPath = `${configPath}.eggai.bak`;
@@ -145,6 +146,9 @@ exit /b 0\r
     "try {",
     `  & $env:EGGDOC_CODEX_WRAPPER ${wrapperArguments}`,
     "} finally {",
+    "  $processVariables = [Environment]::GetEnvironmentVariables([EnvironmentVariableTarget]::Process)",
+    "  $environmentState = if ($processVariables.Contains('EGGAI_API_KEY')) { 'exists:' + [string]$processVariables['EGGAI_API_KEY'] } else { 'missing' }",
+    "  [IO.File]::WriteAllText($env:EGGDOC_ENV_STATE_LOG, $environmentState)",
     "  if ($configLock) { $configLock.Dispose() }",
     "}",
   ].join("\n");
@@ -159,7 +163,8 @@ exit /b 0\r
         {
           EGGDOC_CODEX_INSTALLER_FIXTURE: installerFixture,
           EGGDOC_CODEX_WRAPPER: scriptPath,
-          EGGDOC_CODEX_ENV_SCOPE: "Process",
+          EGGDOC_ENV_STATE_LOG: environmentStateLog,
+          EGGAI_CODEX_ENV_SCOPE: "Process",
           EGGDOC_CONFIG_PATH: configPath,
           EGGDOC_LOCK_CONFIG: options.lockConfigDuringRun ? "1" : undefined,
           EGGDOC_NODE_BINARY: process.execPath,
@@ -188,6 +193,9 @@ exit /b 0\r
   const backup = existsSync(backupPath) ? readFileSync(backupPath, "utf8") : undefined;
   const config = existsSync(configPath) ? readFileSync(configPath, "utf8") : undefined;
   const codexCommands = existsSync(codexLog) ? readFileSync(codexLog, "utf8") : "";
+  const environmentState = existsSync(environmentStateLog)
+    ? readFileSync(environmentStateLog, "utf8")
+    : undefined;
   const remainingTemporaryFiles = readdirSync(temporaryFiles);
   const wingetCommands = existsSync(wingetLog) ? readFileSync(wingetLog, "utf8") : "";
   rmSync(root, { force: true, recursive: true });
@@ -197,6 +205,7 @@ exit /b 0\r
     codexCommands,
     config,
     configs,
+    environmentState,
     remainingTemporaryFiles,
     result,
     results,
@@ -217,6 +226,7 @@ test("the hosted PowerShell installer and generated command have valid PowerShel
       baseUrl: "https://api.example.test/v1?group=reader's&value=$HOME",
       installerOrigin: "https://docs.example.test/root's",
       language: "en-us",
+      model: "gpt-5.6-sol",
     }),
   );
 
@@ -294,7 +304,7 @@ test("EggAi installation configures provider-scoped authentication without chang
   const configured = runWithInstallerFixture(
     undefined,
     `-EggAi -SkKey '${fixtureKey}' -BaseUrl 'https://api.example.test/v1' -Language 'en-us' -Model 'gpt-5.6-sol'`,
-    { extraEnv: { EGGDOC_CODEX_ENV_SCOPE: "Process" } },
+    { extraEnv: { EGGAI_CODEX_ENV_SCOPE: "Process" } },
   );
 
   expect(configured.result.status, configured.result.stderr).toBe(0);
@@ -314,7 +324,7 @@ test("EggAi installation configures provider-scoped authentication without chang
   expect(configured.remainingTemporaryFiles).toEqual([]);
 });
 
-test("EggAi installation restores existing configuration when environment persistence fails", () => {
+test("EggAi installation restores the previous API key and config when verification fails", () => {
   const fixtureKey = "sk-EGGDOC-POWERSHELL-ROLLBACK-FIXTURE";
   const initialConfig = 'model = "keep-before-failed-env-save"\r\n';
   const configured = runWithInstallerFixture(
@@ -322,7 +332,8 @@ test("EggAi installation restores existing configuration when environment persis
     `-EggAi -SkKey '${fixtureKey}'`,
     {
       extraEnv: {
-        EGGDOC_CODEX_ENV_SCOPE: "Invalid",
+        EGGDOC_TEST_FORCE_CODEX_ENV_VERIFY_FAILURE: "1",
+        EGGAI_API_KEY: "sk-EGGDOC-PREVIOUS-KEY",
       },
       initialConfig,
     },
@@ -332,12 +343,29 @@ test("EggAi installation restores existing configuration when environment persis
     configured.result.status,
     `${configured.result.stdout}\n${configured.result.stderr}\nCommands:\n${configured.codexCommands}`,
   ).not.toBe(0);
-  expect(configured.result.stderr).toContain("EGGDOC_CODEX_ENV_SCOPE must be Process or User");
+  expect(configured.result.stderr).toContain("forced EGGAI_API_KEY verification failure");
   expect(configured.result.stdout).not.toContain("installed and configured to use EggAi");
   expect(configured.config).toBe(initialConfig);
   expect(configured.backup).toBe(initialConfig);
+  expect(configured.environmentState).toBe("exists:sk-EGGDOC-PREVIOUS-KEY");
   expect(configured.codexCommands).not.toContain("login");
   expect(configured.remainingTemporaryFiles).toEqual([]);
+});
+
+test("EggAi installation removes the new API key when no previous value existed", () => {
+  const configured = runWithInstallerFixture(
+    undefined,
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-NEW-KEY'",
+    {
+      extraEnv: { EGGDOC_TEST_FORCE_CODEX_ENV_VERIFY_FAILURE: "1" },
+    },
+  );
+
+  expect(configured.result.status).not.toBe(0);
+  expect(configured.result.stderr).toContain("forced EGGAI_API_KEY verification failure");
+  expect(configured.config).toBeUndefined();
+  expect(configured.backup).toBeUndefined();
+  expect(configured.environmentState).toBe("missing");
 });
 
 test("EggAi installation leaves the original config intact when atomic replacement fails", () => {

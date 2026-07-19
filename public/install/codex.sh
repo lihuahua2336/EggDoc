@@ -262,6 +262,10 @@ CONFIG_TMP=""
 BACKUP_TMP=""
 EGGAI_ENV_TMP=""
 PROFILE_TMP=""
+EGGAI_ENV_BACKUP_TMP=""
+PROFILE_BACKUP_TMP=""
+EGGAI_ENV_CHANGED=0
+PROFILE_CHANGED=0
 cleanup() {
   [ -z "$INSTALLER_TMP" ] || rm -f "$INSTALLER_TMP"
   [ -z "$CLEAN_FILE" ] || rm -f "$CLEAN_FILE"
@@ -269,6 +273,8 @@ cleanup() {
   [ -z "$BACKUP_TMP" ] || rm -f "$BACKUP_TMP"
   [ -z "$EGGAI_ENV_TMP" ] || rm -f "$EGGAI_ENV_TMP"
   [ -z "$PROFILE_TMP" ] || rm -f "$PROFILE_TMP"
+  [ -z "$EGGAI_ENV_BACKUP_TMP" ] || rm -f "$EGGAI_ENV_BACKUP_TMP"
+  [ -z "$PROFILE_BACKUP_TMP" ] || rm -f "$PROFILE_BACKUP_TMP"
 }
 trap cleanup EXIT
 trap 'exit 130' HUP INT
@@ -403,7 +409,7 @@ awk -v remove_model="$REMOVE_MODEL" '
   in_eggai_provider {
     next
   }
-  !seen_table && /^[[:space:]]*(developer_instructions|model_provider|model_providers[.]eggai)[[:space:]]*=/ {
+  !seen_table && /^[[:space:]]*(developer_instructions|model_provider|model_providers[.][[:space:]]*(eggai|"eggai"|\047eggai\047))[[:space:]]*=/ {
     next
   }
   !seen_table && remove_model && /^[[:space:]]*model[[:space:]]*=/ {
@@ -496,7 +502,48 @@ restore_previous_config() {
   fi
 }
 
+rollback_eggai_api_key() {
+  rollback_status=0
+
+  if [ "$EGGAI_ENV_CHANGED" = "1" ]; then
+    if [ "$EGGAI_ENV_EXISTED" = "1" ]; then
+      if [ -z "$EGGAI_ENV_BACKUP_TMP" ] || ! cp -p "$EGGAI_ENV_BACKUP_TMP" "$EGGAI_ENV_FILE"; then
+        rollback_status=1
+      fi
+    elif ! rm -f "$EGGAI_ENV_FILE"; then
+      rollback_status=1
+    fi
+  fi
+
+  if [ "$PROFILE_CHANGED" = "1" ]; then
+    if [ "$PROFILE_EXISTED" = "1" ]; then
+      if [ -z "$PROFILE_BACKUP_TMP" ] || ! cp -p "$PROFILE_BACKUP_TMP" "$PROFILE_FILE"; then
+        rollback_status=1
+      fi
+    elif ! rm -f "$PROFILE_FILE"; then
+      rollback_status=1
+    fi
+  fi
+
+  if [ "$rollback_status" = "0" ]; then
+    EGGAI_ENV_CHANGED=0
+    PROFILE_CHANGED=0
+  fi
+  return "$rollback_status"
+}
+
 save_eggai_api_key() {
+  EGGAI_ENV_EXISTED=0
+  PROFILE_EXISTED=0
+  EGGAI_ENV_CHANGED=0
+  PROFILE_CHANGED=0
+
+  if [ -e "$EGGAI_ENV_FILE" ]; then
+    [ -f "$EGGAI_ENV_FILE" ] || return 1
+    [ ! -L "$EGGAI_ENV_FILE" ] || return 1
+    EGGAI_ENV_EXISTED=1
+  fi
+
   EGGAI_ENV_TMP="$(mktemp "$CODEX_HOME/.eggai.env.XXXXXX")" || return 1
   chmod 600 "$EGGAI_ENV_TMP" || return 1
   {
@@ -506,17 +553,10 @@ save_eggai_api_key() {
     printf '\nexport EGGAI_API_KEY\n'
   } > "$EGGAI_ENV_TMP" || return 1
 
-  if [ -f "$EGGAI_ENV_FILE" ] && cmp -s "$EGGAI_ENV_FILE" "$EGGAI_ENV_TMP"; then
-    rm -f "$EGGAI_ENV_TMP" || return 1
-    EGGAI_ENV_TMP=""
-  else
-    mv "$EGGAI_ENV_TMP" "$EGGAI_ENV_FILE" || return 1
-    EGGAI_ENV_TMP=""
-  fi
-
   PROFILE_FILE="$(select_shell_profile)"
   [ "$PROFILE_FILE" != "$CONFIG_FILE" ] || return 1
   [ "$PROFILE_FILE" != "$EGGAI_ENV_FILE" ] || return 1
+  [ ! -L "$PROFILE_FILE" ] || return 1
   PROFILE_DIR="${PROFILE_FILE%/*}"
   if [ "$PROFILE_DIR" = "$PROFILE_FILE" ]; then
     PROFILE_DIR="."
@@ -525,9 +565,12 @@ save_eggai_api_key() {
   if [ -e "$PROFILE_FILE" ] && [ ! -f "$PROFILE_FILE" ]; then
     return 1
   fi
+  if [ -f "$PROFILE_FILE" ]; then
+    PROFILE_EXISTED=1
+  fi
 
   PROFILE_TMP="$(mktemp "$PROFILE_DIR/.eggai-codex-profile.XXXXXX")" || return 1
-  if [ -f "$PROFILE_FILE" ]; then
+  if [ "$PROFILE_EXISTED" = "1" ]; then
     cp -p "$PROFILE_FILE" "$PROFILE_TMP" || return 1
     PROFILE_SOURCE="$PROFILE_FILE"
   else
@@ -576,21 +619,51 @@ save_eggai_api_key() {
     echo "# <<< eggai-codex-env"
   } >> "$PROFILE_TMP" || return 1
 
-  if [ -f "$PROFILE_FILE" ] && cmp -s "$PROFILE_FILE" "$PROFILE_TMP"; then
+  if [ "$EGGAI_ENV_EXISTED" = "1" ] && cmp -s "$EGGAI_ENV_FILE" "$EGGAI_ENV_TMP"; then
+    chmod 600 "$EGGAI_ENV_FILE" || return 1
+    rm -f "$EGGAI_ENV_TMP" || return 1
+    EGGAI_ENV_TMP=""
+  else
+    if [ "$EGGAI_ENV_EXISTED" = "1" ]; then
+      EGGAI_ENV_BACKUP_TMP="$(mktemp "$CODEX_HOME/.eggai.env.backup.XXXXXX")" || return 1
+      cp -p "$EGGAI_ENV_FILE" "$EGGAI_ENV_BACKUP_TMP" || return 1
+      chmod 600 "$EGGAI_ENV_BACKUP_TMP" || return 1
+    fi
+    EGGAI_ENV_CHANGED=1
+  fi
+
+  if [ "$PROFILE_EXISTED" = "1" ] && cmp -s "$PROFILE_FILE" "$PROFILE_TMP"; then
     rm -f "$PROFILE_TMP" || return 1
     PROFILE_TMP=""
   else
+    if [ "$PROFILE_EXISTED" = "1" ]; then
+      PROFILE_BACKUP_TMP="$(mktemp "$PROFILE_DIR/.eggai-codex-profile-backup.XXXXXX")" || return 1
+      cp -p "$PROFILE_FILE" "$PROFILE_BACKUP_TMP" || return 1
+    fi
+    PROFILE_CHANGED=1
+  fi
+
+  if [ "$EGGAI_ENV_CHANGED" = "1" ]; then
+    mv "$EGGAI_ENV_TMP" "$EGGAI_ENV_FILE" || return 1
+    EGGAI_ENV_TMP=""
+  fi
+  if [ "$PROFILE_CHANGED" = "1" ]; then
     mv "$PROFILE_TMP" "$PROFILE_FILE" || return 1
     PROFILE_TMP=""
   fi
 
   EGGAI_API_KEY="$SK_KEY"
   export EGGAI_API_KEY
-  [ "$EGGAI_API_KEY" = "$SK_KEY" ]
+  [ "$EGGAI_API_KEY" = "$SK_KEY" ] || return 1
+  return 0
 }
+
+trap 'rollback_eggai_api_key >/dev/null 2>&1 || :; exit 130' HUP INT
+trap 'rollback_eggai_api_key >/dev/null 2>&1 || :; exit 143' TERM
 
 say env
 if ! save_eggai_api_key; then
+  rollback_eggai_api_key || fail "could not save EGGAI_API_KEY and the previous environment/profile could not be restored."
   restore_previous_config || fail "could not save EGGAI_API_KEY and the previous configuration could not be restored."
   fail "could not save EGGAI_API_KEY. The previous configuration was restored."
 fi
