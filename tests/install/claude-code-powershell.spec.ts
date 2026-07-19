@@ -47,6 +47,7 @@ function runWithInstallerFixture(
   wrapperArguments = "",
   initialSettings?: string,
   extraEnv: NodeJS.ProcessEnv = {},
+  options: { runs?: number; lockSettings?: boolean; removeBackupAfterFirstRun?: boolean } = {},
 ) {
   const root = mkdtempSync(path.join(tmpdir(), "eggdoc-claude-powershell-"));
   const home = path.join(root, "home");
@@ -78,21 +79,48 @@ function runWithInstallerFixture(
     "  }",
     "  Copy-Item -LiteralPath $env:EGGDOC_CLAUDE_INSTALLER_FIXTURE -Destination $OutFile -Force",
     "}",
-    `& $env:EGGDOC_CLAUDE_WRAPPER ${wrapperArguments}`,
+    "$settingsLock = $null",
+    "if ($env:EGGDOC_LOCK_SETTINGS) {",
+    "  $settingsLock = [IO.File]::Open($env:EGGDOC_SETTINGS_PATH, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)",
+    "}",
+    "try {",
+    `  & $env:EGGDOC_CLAUDE_WRAPPER ${wrapperArguments}`,
+    "} finally {",
+    "  if ($settingsLock) { $settingsLock.Dispose() }",
+    "}",
   ].join("\n");
-  const result = runPowerShell(
-    ["-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")],
-    {
-      EGGDOC_CLAUDE_INSTALLER_FIXTURE: fixture,
-      EGGDOC_NODE_BINARY: process.execPath,
-      EGGDOC_CLAUDE_WRAPPER: scriptPath,
-      HOME: home,
-      TEMP: temporaryFiles,
-      TMP: temporaryFiles,
-      USERPROFILE: home,
-      ...extraEnv,
-    },
-  );
+  const results = [];
+  const backups: Array<string | undefined> = [];
+  const settingsSnapshots: Array<string | undefined> = [];
+  for (let run = 0; run < (options.runs ?? 1); run += 1) {
+    results.push(
+      runPowerShell(
+        ["-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")],
+        {
+          EGGDOC_CLAUDE_INSTALLER_FIXTURE: fixture,
+          EGGDOC_CLAUDE_WRAPPER: scriptPath,
+          EGGDOC_CLAUDE_ENV_SCOPE: "Process",
+          EGGDOC_LOCK_SETTINGS: options.lockSettings ? "1" : undefined,
+          EGGDOC_NODE_BINARY: process.execPath,
+          EGGDOC_SETTINGS_PATH: path.join(home, ".claude", "settings.json"),
+          HOME: home,
+          TEMP: temporaryFiles,
+          TMP: temporaryFiles,
+          USERPROFILE: home,
+          ...extraEnv,
+        },
+      ),
+    );
+    const snapshotSettingsPath = path.join(home, ".claude", "settings.json");
+    const snapshotBackupPath = `${snapshotSettingsPath}.eggai.bak`;
+    settingsSnapshots.push(
+      existsSync(snapshotSettingsPath) ? readFileSync(snapshotSettingsPath, "utf8") : undefined,
+    );
+    backups.push(existsSync(snapshotBackupPath) ? readFileSync(snapshotBackupPath, "utf8") : undefined);
+    if (run === 0 && options.removeBackupAfterFirstRun) {
+      rmSync(snapshotBackupPath, { force: true });
+    }
+  }
   const settingsPath = path.join(home, ".claude", "settings.json");
   const backupPath = `${settingsPath}.eggai.bak`;
   const settings = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : undefined;
@@ -101,7 +129,17 @@ function runWithInstallerFixture(
   const backupAcl = existsSync(backupPath) ? readAcl(backupPath) : undefined;
   const remainingTemporaryFiles = readdirSync(temporaryFiles);
   rmSync(root, { force: true, recursive: true });
-  return { backup, backupAcl, remainingTemporaryFiles, result, settings, settingsAcl };
+  return {
+    backup,
+    backupAcl,
+    backups,
+    remainingTemporaryFiles,
+    result: results.at(-1)!,
+    results,
+    settings,
+    settingsAcl,
+    settingsSnapshots,
+  };
 }
 
 test("the hosted Claude Code PowerShell installer has valid syntax", () => {
@@ -176,6 +214,27 @@ test("Claude Code PowerShell EggAi dry-run validates inputs and redacts the cred
   ]);
   expect(unsafeUrl.status).not.toBe(0);
   expect(missingKey.status).not.toBe(0);
+
+  for (const invalidBaseUrl of [
+    "https://reader:secret@api.example.test/v1",
+    "https://api.example.test/v1?models=1",
+    "https://api.example.test/v1#models",
+  ]) {
+    const invalid = runPowerShell([
+      "-File",
+      scriptPath,
+      "-DryRun",
+      "-EggAi",
+      "-SkKey",
+      "secret",
+      "-BaseUrl",
+      invalidBaseUrl,
+      "-Model",
+      "claude-sonnet-5",
+    ]);
+    expect(invalid.status).not.toBe(0);
+    expect(invalid.stderr).toMatch(/baseurl must not contain user information|baseurl must not contain a query string|baseurl must not contain a fragment/);
+  }
 });
 
 test("Claude Code PowerShell installer accepts official release channels and rejects script input", () => {
@@ -261,6 +320,41 @@ Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBi
     },
     permissions: { allow: ["Read"] },
   });
+});
+
+test("Claude Code PowerShell EggAi mode is idempotent and does not recreate a removed backup", () => {
+  const initialSettings = JSON.stringify({ env: { KEEP_ME: "yes" } });
+  const configured = runWithInstallerFixture(
+    "# Keep the preinstalled Claude fixture.\n",
+    true,
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-IDEMPOTENT' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-5'",
+    initialSettings,
+    {},
+    { runs: 2, removeBackupAfterFirstRun: true },
+  );
+
+  expect(configured.results.map((result) => result.status)).toEqual([0, 0]);
+  expect(configured.settingsSnapshots[0]).toBe(configured.settingsSnapshots[1]);
+  expect(configured.backups).toEqual([initialSettings, undefined]);
+  expect(configured.backup).toBeUndefined();
+  expect(configured.result.stdout).toContain("Backup: unchanged (configuration already current)");
+});
+
+test("Claude Code PowerShell leaves the original settings intact when atomic replacement fails", () => {
+  const initialSettings = JSON.stringify({ env: { KEEP_ME: "yes" } });
+  const configured = runWithInstallerFixture(
+    "# Keep the preinstalled Claude fixture.\n",
+    true,
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-LOCKED' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-5'",
+    initialSettings,
+    {},
+    { lockSettings: true },
+  );
+
+  expect(configured.result.status).not.toBe(0);
+  expect(configured.settings).toBe(initialSettings);
+  expect(configured.result.stdout).not.toContain("installed and configured to use EggAi");
+  expect(configured.remainingTemporaryFiles).toEqual([]);
 });
 
 test("Claude Code PowerShell EggAi mode leaves malformed existing settings untouched", () => {

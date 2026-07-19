@@ -46,6 +46,7 @@ function runWithInstallerFixture(
   args: string[] = [],
   initialSettings?: string,
   extraEnv: NodeJS.ProcessEnv = {},
+  options: { runs?: number; removeBackupAfterFirstRun?: boolean } = {},
 ) {
   const root = mkdtempSync(path.join(tmpdir(), "eggdoc-claude-shell-"));
   const bin = path.join(root, "bin");
@@ -113,20 +114,44 @@ cat "$FAKE_INSTALLER_SOURCE" > "$output"
     chmodSync(claude, 0o755);
   }
 
-  const result = runShell(args, {
-    FAKE_INSTALLER_SOURCE: shellPath(fixture),
-    HOME: shellPath(home),
-    PATH: `${bin}${path.delimiter}${testPath ?? ""}`,
-    TMPDIR: shellPath(temporaryFiles),
-    ...extraEnv,
-  });
+  const results = [];
+  const backups: Array<string | undefined> = [];
+  const settingsSnapshots: Array<string | undefined> = [];
+  for (let run = 0; run < (options.runs ?? 1); run += 1) {
+    results.push(
+      runShell(args, {
+        FAKE_INSTALLER_SOURCE: shellPath(fixture),
+        HOME: shellPath(home),
+        PATH: `${bin}${path.delimiter}${testPath ?? ""}`,
+        TMPDIR: shellPath(temporaryFiles),
+        ...extraEnv,
+      }),
+    );
+    const snapshotSettingsPath = path.join(home, ".claude", "settings.json");
+    const snapshotBackupPath = `${snapshotSettingsPath}.eggai.bak`;
+    settingsSnapshots.push(
+      existsSync(snapshotSettingsPath) ? readFileSync(snapshotSettingsPath, "utf8") : undefined,
+    );
+    backups.push(existsSync(snapshotBackupPath) ? readFileSync(snapshotBackupPath, "utf8") : undefined);
+    if (run === 0 && options.removeBackupAfterFirstRun) {
+      rmSync(snapshotBackupPath, { force: true });
+    }
+  }
   const settingsPath = path.join(home, ".claude", "settings.json");
   const backupPath = `${settingsPath}.eggai.bak`;
   const settings = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : undefined;
   const backup = existsSync(backupPath) ? readFileSync(backupPath, "utf8") : undefined;
   const remainingTemporaryFiles = readdirSync(temporaryFiles);
   rmSync(root, { force: true, recursive: true });
-  return { backup, remainingTemporaryFiles, result, settings };
+  return {
+    backup,
+    backups,
+    remainingTemporaryFiles,
+    result: results.at(-1)!,
+    results,
+    settings,
+    settingsSnapshots,
+  };
 }
 
 test("the hosted Claude Code Shell installer has valid POSIX syntax", () => {
@@ -181,6 +206,42 @@ test("Claude Code Shell EggAi dry-run validates inputs and redacts the credentia
 
   expect(runShell(["--eggai", "--sk-key", "secret", "--baseurl", "http://unsafe.test"]).status).not.toBe(0);
   expect(runShell(["--eggai", "--sk-key", "secret", "--baseurl", "https:///v1"]).status).not.toBe(0);
+  expect(
+    runShell([
+      "--dry-run",
+      "--eggai",
+      "--sk-key",
+      "secret",
+      "--model",
+      "claude-sonnet-4-5",
+      "--baseurl",
+      "https://reader:secret@api.example.test/v1",
+    ]).stderr,
+  ).toContain("baseurl must contain a host and no user information");
+  expect(
+    runShell([
+      "--dry-run",
+      "--eggai",
+      "--sk-key",
+      "secret",
+      "--model",
+      "claude-sonnet-4-5",
+      "--baseurl",
+      "https://api.example.test/v1?models=1",
+    ]).stderr,
+  ).toContain("baseurl must not contain whitespace, a query, or a fragment");
+  expect(
+    runShell([
+      "--dry-run",
+      "--eggai",
+      "--sk-key",
+      "secret",
+      "--model",
+      "claude-sonnet-4-5",
+      "--baseurl",
+      "https://api.example.test/v1#models",
+    ]).stderr,
+  ).toContain("baseurl must not contain whitespace, a query, or a fragment");
   expect(runShell(["--eggai", "--baseurl", "https://api.example.test/v1"]).status).not.toBe(0);
 });
 
@@ -286,6 +347,32 @@ chmod +x "$HOME/.local/bin/claude"
     },
     permissions: { allow: ["Read"] },
   });
+});
+
+test("Claude Code Shell EggAi mode is idempotent and does not recreate a removed backup", () => {
+  const initialSettings = JSON.stringify({ env: { KEEP_ME: "yes" } });
+  const configured = runWithInstallerFixture(
+    "#!/usr/bin/env bash\nexit 0\n",
+    true,
+    [
+      "--eggai",
+      "--sk-key",
+      "sk-EGGDOC-SHELL-IDEMPOTENT",
+      "--baseurl",
+      "https://api.example.test/v1",
+      "--model",
+      "claude-sonnet-4-5",
+    ],
+    initialSettings,
+    {},
+    { runs: 2, removeBackupAfterFirstRun: true },
+  );
+
+  expect(configured.results.map((result) => result.status)).toEqual([0, 0]);
+  expect(configured.settingsSnapshots[0]).toBe(configured.settingsSnapshots[1]);
+  expect(configured.backups).toEqual([initialSettings, undefined]);
+  expect(configured.backup).toBeUndefined();
+  expect(configured.result.stdout).toContain("Backup: unchanged (configuration already current)");
 });
 
 test("Claude Code Shell EggAi mode leaves malformed existing settings untouched", () => {

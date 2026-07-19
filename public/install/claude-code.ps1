@@ -15,7 +15,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$OfficialInstallerUrl = "https://claude.ai/install.ps1"
+$OfficialInstallerUrl = if ($env:CLAUDE_CODE_INSTALLER_URL) { $env:CLAUDE_CODE_INSTALLER_URL } else { "https://claude.ai/install.ps1" }
 if ([string]::IsNullOrWhiteSpace($Version)) {
   $Version = if ($env:CLAUDE_CODE_VERSION) { $env:CLAUDE_CODE_VERSION } else { "latest" }
 }
@@ -57,12 +57,30 @@ function Add-ClaudeBinToPath {
   }
 }
 
+function Get-TemporaryDirectory {
+  $temporaryDirectory = if (-not [string]::IsNullOrWhiteSpace($env:TEMP)) {
+    $env:TEMP
+  } elseif (-not [string]::IsNullOrWhiteSpace($env:TMP)) {
+    $env:TMP
+  } else {
+    [IO.Path]::GetTempPath()
+  }
+  New-Item -ItemType Directory -Force -Path $temporaryDirectory | Out-Null
+  $temporaryDirectory
+}
+
 function Get-AnthropicBaseUrl {
   param([string]$Value)
 
   $uri = $null
   if (-not [Uri]::TryCreate($Value, [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -ne "https") {
     Throw-InstallError "baseurl must be an HTTPS URL."
+  }
+  if ($Value -match "[\x00-\x20\x7f]") {
+    Throw-InstallError "baseurl must not contain whitespace or control characters."
+  }
+  if ([string]::IsNullOrWhiteSpace($uri.Host)) {
+    Throw-InstallError "baseurl must contain a host."
   }
   if (-not [string]::IsNullOrEmpty($uri.UserInfo) -or -not [string]::IsNullOrEmpty($uri.Query) -or -not [string]::IsNullOrEmpty($uri.Fragment)) {
     Throw-InstallError "baseurl must not contain user information, a query, or a fragment."
@@ -89,6 +107,9 @@ function Update-ClaudeSettings {
 
   $settingsDirectory = Split-Path -Parent $SettingsFile
   New-Item -ItemType Directory -Force -Path $settingsDirectory | Out-Null
+  if (Test-Path -LiteralPath $SettingsFile -PathType Container) {
+    Throw-InstallError "Claude Code settings path exists but is not a regular file."
+  }
   $settingsExisted = Test-Path -LiteralPath $SettingsFile
   $content = if ($settingsExisted) { Get-Content -LiteralPath $SettingsFile -Raw } else { "{}" }
   try {
@@ -115,12 +136,17 @@ function Update-ClaudeSettings {
   $settings.env | Add-Member -NotePropertyName ANTHROPIC_DEFAULT_SONNET_MODEL -NotePropertyValue $ClaudeSonnetModel -Force
   $settings.env | Add-Member -NotePropertyName ANTHROPIC_DEFAULT_HAIKU_MODEL -NotePropertyValue $ClaudeHaikuModel -Force
 
+  $json = $settings | ConvertTo-Json -Depth 100
+  $newContent = "$json`n"
+  if ($settingsExisted -and $content.TrimStart([char]0xFEFF) -ceq $newContent) {
+    return [pscustomobject]@{ BackupFile = $null; Changed = $false; Existed = $true }
+  }
+
   $backupFile = $null
   $temporarySettings = "$SettingsFile.eggai.tmp.$([guid]::NewGuid())"
   $replaceBackup = "$SettingsFile.eggai.replace.$([guid]::NewGuid())"
   try {
-    $json = $settings | ConvertTo-Json -Depth 100
-    [IO.File]::WriteAllText($temporarySettings, "$json`n", (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($temporarySettings, $newContent, (New-Object Text.UTF8Encoding($false)))
     Get-Content -LiteralPath $temporarySettings -Raw | ConvertFrom-Json | Out-Null
 
     if ($settingsExisted) {
@@ -144,7 +170,7 @@ function Update-ClaudeSettings {
     Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue
   }
 
-  return $backupFile
+  return [pscustomobject]@{ BackupFile = $backupFile; Changed = $true; Existed = $settingsExisted }
 }
 
 if ($Version -ne "latest" -and $Version -ne "stable" -and $Version -notmatch "^\d+(\.\d+){2,}$") {
@@ -167,7 +193,7 @@ if ($EggAiMode) {
 }
 
 $userHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
-$claudeHome = Join-Path $userHome ".claude"
+$claudeHome = if ($env:CLAUDE_HOME) { $env:CLAUDE_HOME } else { Join-Path $userHome ".claude" }
 $settingsFile = Join-Path $claudeHome "settings.json"
 
 if ($DryRun) {
@@ -251,7 +277,7 @@ if ($EggAiMode) {
   }
 }
 
-$temporaryInstaller = Join-Path $env:TEMP "eggdoc-claude-code-$([guid]::NewGuid()).ps1"
+$temporaryInstaller = Join-Path (Get-TemporaryDirectory) "eggdoc-claude-code-$([guid]::NewGuid()).ps1"
 
 try {
   Write-Host "Installing or updating Claude Code from Anthropic..."
@@ -290,13 +316,17 @@ $versionOutput = & $claudeCommand.Source --version
 if ($LASTEXITCODE -ne 0) {
   Throw-InstallError "claude --version failed after installation."
 }
+$versionText = ($versionOutput -join [Environment]::NewLine).Trim()
+if ([string]::IsNullOrWhiteSpace($versionText)) {
+  Throw-InstallError "claude --version returned no version information."
+}
 
 Write-Host "Done: Claude Code is installed."
-Write-Host $versionOutput
+Write-Host $versionText
 
 if ($EggAiMode) {
   Write-Host "Writing EggAi Claude Code configuration..."
-  $backupFile = Update-ClaudeSettings `
+  $settingsUpdate = Update-ClaudeSettings `
     -SettingsFile $settingsFile `
     -ProviderBaseUrl $anthropicBaseUrl `
     -AuthToken $Sk_Key `
@@ -307,5 +337,11 @@ if ($EggAiMode) {
     -ClaudeFableModel $FableModel
   Write-Host "Done: Claude Code is installed and configured to use EggAi."
   Write-Host "Settings: $settingsFile"
-  Write-Host "Backup: $backupFile"
+  if ($settingsUpdate.BackupFile) {
+    Write-Host "Backup: $($settingsUpdate.BackupFile)"
+  } elseif ($settingsUpdate.Existed -and -not $settingsUpdate.Changed) {
+    Write-Host "Backup: unchanged (configuration already current)"
+  } else {
+    Write-Host "Backup: not needed (new configuration)"
+  }
 }

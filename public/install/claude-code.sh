@@ -2,7 +2,7 @@
 set -eu
 umask 077
 
-OFFICIAL_INSTALLER_URL="https://claude.ai/install.sh"
+OFFICIAL_INSTALLER_URL="${CLAUDE_CODE_INSTALLER_URL:-https://claude.ai/install.sh}"
 INSTALL_TARGET="${CLAUDE_CODE_VERSION:-latest}"
 DRY_RUN="${DRY_RUN:-0}"
 BASE_URL="${BASE_URL:-https://api.eggai.icu/v1}"
@@ -13,7 +13,7 @@ SONNET_MODEL="${SONNET_MODEL:-${ANTHROPIC_DEFAULT_SONNET_MODEL:-}}"
 HAIKU_MODEL="${HAIKU_MODEL:-${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}}"
 FABLE_MODEL="${FABLE_MODEL:-${ANTHROPIC_DEFAULT_FABLE_MODEL:-}}"
 EGGAI_MODE=0
-CLAUDE_HOME="$HOME/.claude"
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 SETTINGS_FILE="$CLAUDE_HOME/settings.json"
 
 usage() {
@@ -37,8 +37,9 @@ Options:
   --help              Show this help.
 
 Environment variables are also supported:
-  CLAUDE_CODE_VERSION, SK_KEY, EGGAI_API_KEY, BASE_URL, MODEL, ANTHROPIC_MODEL,
-  OPUS_MODEL, SONNET_MODEL, HAIKU_MODEL, FABLE_MODEL, DRY_RUN
+  CLAUDE_CODE_VERSION, CLAUDE_CODE_INSTALLER_URL, CLAUDE_HOME, SK_KEY, EGGAI_API_KEY,
+  BASE_URL, MODEL, ANTHROPIC_MODEL, OPUS_MODEL, SONNET_MODEL, HAIKU_MODEL, FABLE_MODEL,
+  DRY_RUN
 EOF
 }
 
@@ -159,10 +160,13 @@ if [ "$EGGAI_MODE" = "1" ]; then
   BASE_URL_AUTHORITY="${BASE_URL#https://}"
   BASE_URL_AUTHORITY="${BASE_URL_AUTHORITY%%/*}"
   case "$BASE_URL_AUTHORITY" in
-    ""|*@*) fail "baseurl must contain a host and no user information." ;;
+    ""|:*|*:|/*|*@*) fail "baseurl must contain a host and no user information." ;;
   esac
   case "$BASE_URL" in
     *[[:space:]?#]*) fail "baseurl must not contain whitespace, a query, or a fragment." ;;
+  esac
+  case "$SK_KEY" in
+    *[[:space:]]*|*[[:cntrl:]]*) fail "sk-key must not contain whitespace or control characters." ;;
   esac
 fi
 
@@ -244,7 +248,9 @@ cleanup() {
     rm -f "$SETTINGS_SOURCE_TMP"
   fi
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 130' HUP INT
+trap 'exit 143' TERM
 
 TMP_FILE="$(mktemp "${TMPDIR:-/tmp}/eggdoc-claude-code-installer.XXXXXX")" || \
   fail "could not create a temporary installer file."
@@ -347,7 +353,8 @@ PYTHON
 fi
 
 echo "Installing or updating Claude Code from Anthropic..."
-if ! curl -fsSL "$OFFICIAL_INSTALLER_URL" -o "$TMP_FILE"; then
+if ! curl -fsSL --retry 2 --connect-timeout 15 --max-time 300 \
+  "$OFFICIAL_INSTALLER_URL" -o "$TMP_FILE"; then
   fail "could not download the Anthropic installer. Check network and region availability."
 fi
 
@@ -372,6 +379,7 @@ command -v claude >/dev/null 2>&1 || \
   fail "Claude Code was installed, but claude is not on PATH. Restart the shell and run claude --version."
 
 VERSION_OUTPUT="$(claude --version)" || fail "claude --version failed after installation."
+[ -n "$VERSION_OUTPUT" ] || fail "claude --version returned no version information."
 
 if [ "$EGGAI_MODE" = "0" ]; then
   echo "Done: Claude Code is installed."
@@ -382,6 +390,9 @@ fi
 echo "Writing EggAi Claude Code configuration..."
 mkdir -p "$CLAUDE_HOME"
 chmod 700 "$CLAUDE_HOME" || fail "could not secure the Claude Code settings directory."
+if [ -e "$SETTINGS_FILE" ] && [ ! -f "$SETTINGS_FILE" ]; then
+  fail "Claude Code settings path exists but is not a regular file."
+fi
 SETTINGS_SOURCE="$SETTINGS_FILE"
 SETTINGS_SOURCE_TMP=""
 SETTINGS_EXISTED=1
@@ -411,7 +422,7 @@ case "$JSON_ENGINE" in
     node - "$SETTINGS_SOURCE" "$SETTINGS_TMP" <<'NODE'
 const fs = require("fs");
 const [source, target] = process.argv.slice(2);
-const settings = JSON.parse(fs.readFileSync(source, "utf8"));
+const settings = JSON.parse(fs.readFileSync(source, "utf8").replace(/^\uFEFF/, ""));
 if (!settings || Array.isArray(settings) || typeof settings !== "object") {
   throw new Error("settings.json must contain a JSON object");
 }
@@ -497,7 +508,13 @@ PYTHON
 esac
 
 BACKUP_FILE=""
-if [ "$SETTINGS_EXISTED" = "1" ]; then
+SETTINGS_CHANGED=1
+if [ "$SETTINGS_EXISTED" = "1" ] && cmp -s "$SETTINGS_FILE" "$SETTINGS_TMP"; then
+  SETTINGS_CHANGED=0
+  rm -f "$SETTINGS_TMP"
+  SETTINGS_TMP=""
+fi
+if [ "$SETTINGS_CHANGED" = "1" ] && [ "$SETTINGS_EXISTED" = "1" ]; then
   BACKUP_FILE="$SETTINGS_FILE.eggai.bak"
   BACKUP_TMP="$(mktemp "$CLAUDE_HOME/.settings.json.backup.XXXXXX")" || \
     fail "could not create a secure backup file."
@@ -507,8 +524,10 @@ if [ "$SETTINGS_EXISTED" = "1" ]; then
   mv "$BACKUP_TMP" "$BACKUP_FILE"
   BACKUP_TMP=""
 fi
-mv "$SETTINGS_TMP" "$SETTINGS_FILE"
-SETTINGS_TMP=""
+if [ "$SETTINGS_CHANGED" = "1" ]; then
+  mv "$SETTINGS_TMP" "$SETTINGS_FILE"
+  SETTINGS_TMP=""
+fi
 if [ -n "$SETTINGS_SOURCE_TMP" ]; then
   rm -f "$SETTINGS_SOURCE_TMP"
 fi
@@ -519,6 +538,8 @@ echo "$VERSION_OUTPUT"
 echo "Settings: $SETTINGS_FILE"
 if [ -n "$BACKUP_FILE" ]; then
   echo "Backup: $BACKUP_FILE"
+elif [ "$SETTINGS_EXISTED" = "1" ] && [ "$SETTINGS_CHANGED" = "0" ]; then
+  echo "Backup: unchanged (configuration already current)"
 else
   echo "Backup: not created because settings.json did not exist"
 fi
