@@ -28,7 +28,7 @@ order: 20
 ```toml
 model_provider = "eggai"
 developer_instructions = "请默认使用简体中文回答，除非用户明确要求其他语言。"
-model = "gpt-5.2"
+model = "gpt-5.6-sol"
 
 [model_providers.eggai]
 name = "EggAi"
@@ -47,13 +47,7 @@ wire_api = "responses"
 
 ## API Key
 
-macOS/Linux/WSL 会将密钥和 Codex/Node 用户命令路径写入 `CODEX_HOME/eggai.env`，在用户 shell profile 中维护受控加载块，并在一键命令成功后加载到当前终端。Windows 默认写入当前用户环境变量。PowerShell 命令会显式设置：
-
-```powershell
-$env:EGGAI_CODEX_ENV_SCOPE = 'User'
-```
-
-`User` 作用域会跨终端保存，`Process` 仅适合测试或临时会话。API Key 仍然会出现在一键命令中，请不要分享命令、终端历史、截图或配置目录。
+macOS/Linux/WSL 会将密钥和 Codex/Node 用户命令路径写入 `CODEX_HOME/eggai.env`，并在用户 shell profile 中维护受控加载块；安装完成后重新打开终端即可加载。Windows 默认写入当前用户环境变量，跨终端生效。仅测试或临时会话才需要通过 `EGGAI_CODEX_ENV_SCOPE=Process` 覆盖默认作用域。API Key 仍然会出现在一键命令中，请不要分享命令、终端历史、截图或配置目录。
 
 ## 重复配置
 

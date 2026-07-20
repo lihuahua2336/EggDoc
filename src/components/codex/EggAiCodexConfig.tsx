@@ -25,7 +25,7 @@ import {
   PUBLIC_INSTALLER_ORIGIN,
 } from "@/config/public";
 import {
-  CODEX_MODEL_PLACEHOLDER,
+  CODEX_DEFAULT_MODEL,
   buildCodexConfigToml,
   buildPowerShellDefaultInstallCommand,
   buildPowerShellInstallCommand,
@@ -57,11 +57,13 @@ function QuickCopyCommand({
   command,
   copyValue,
   disabled = false,
+  platform,
   resetKey,
 }: {
   command: string;
   copyValue: string;
   disabled?: boolean;
+  platform: CodexPlatform;
   resetKey: string;
 }) {
   const [status, setStatus] = useState<CopyStatus>("idle");
@@ -80,7 +82,7 @@ function QuickCopyCommand({
   return (
     <div className="mt-5 min-w-0 overflow-hidden rounded-sm border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
-        <span>{command.startsWith("$") ? "PowerShell" : "Shell"}</span>
+        <span>{platform === "windows" ? "PowerShell" : "Shell"}</span>
         <Button
           aria-label={
             disabled ? "登录 EggAi 后复制" : status === "copied" ? "安装命令已复制" : "复制安装命令"
@@ -101,10 +103,10 @@ function QuickCopyCommand({
         </Button>
       </div>
       <pre
-        className="m-0 max-h-44 w-full max-w-full min-w-0 overflow-auto border-0 bg-card p-4 text-sm leading-6 text-foreground"
+        className="m-0 w-full max-w-full min-w-0 overflow-x-auto overflow-y-hidden border-0 bg-card p-4 text-sm leading-6 text-foreground"
         data-testid="codex-quick-command"
       >
-        <code className="block !min-w-0 max-w-full whitespace-pre-wrap break-all">{command}</code>
+        <code className="block w-max min-w-full whitespace-nowrap">{command}</code>
       </pre>
       {status === "error" && (
         <p className="border-t border-border px-4 py-2 text-sm text-destructive" role="status">
@@ -199,7 +201,7 @@ export function EggAiCodexConfig() {
     accountState.kind === "active"
       ? selectCodexModel(accountState.modelSummary.names)
       : undefined;
-  const commandModel = codexModel ?? CODEX_MODEL_PLACEHOLDER;
+  const commandModel = codexModel ?? CODEX_DEFAULT_MODEL;
   const codexConfigToml = buildCodexConfigToml({
     baseUrl,
     language: DEFAULT_CODEX_LANGUAGE,
@@ -408,6 +410,7 @@ export function EggAiCodexConfig() {
           command={commandPreview}
           copyValue={commandCopyValue}
           disabled={mode === "eggai" && (!selectedCredential || !codexModel)}
+          platform={platform}
           resetKey={`${mode}\u0000${platform}\u0000${apiKey}\u0000${baseUrl}\u0000${commandModel}`}
         />
 

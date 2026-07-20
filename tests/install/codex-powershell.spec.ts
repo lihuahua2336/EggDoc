@@ -230,15 +230,14 @@ test("the hosted PowerShell installer and generated command have valid PowerShel
   expect(commandSyntax.status).toBe(0);
 });
 
-test("generated PowerShell bootstrap retries in isolation and returns control to the caller", () => {
+test("generated PowerShell command downloads once and returns control to the caller", () => {
   const command = buildPowerShellDefaultInstallCommand("https://docs.example.test/root");
   const harness = [
     "$script:attempts = 0",
-    "function global:Invoke-WebRequest {",
-    "  param([string]$Uri, [string]$OutFile, [int]$TimeoutSec, [switch]$UseBasicParsing)",
+    "function global:Invoke-RestMethod {",
+    "  param([string]$Uri, [switch]$UseBasicParsing, [int]$TimeoutSec)",
     "  $script:attempts += 1",
-    "  if ($script:attempts -lt 3) { throw 'fixture transport failure' }",
-    "  [IO.File]::WriteAllText($OutFile, 'exit 0')",
+    "  return \"Write-Output 'INSTALLER_RAN'\"",
     "}",
     command,
     "Write-Output \"ATTEMPTS:$script:attempts\"",
@@ -250,18 +249,23 @@ test("generated PowerShell bootstrap retries in isolation and returns control to
   ]);
 
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toContain("ATTEMPTS:3");
+  expect(result.stdout).toContain("INSTALLER_RAN");
+  expect(result.stdout).toContain("ATTEMPTS:1");
   expect(result.stdout).toContain("CALLER_CONTINUED");
 });
 
-test("generated PowerShell bootstrap rejects an empty successful response", () => {
+test("generated PowerShell command returns transport failures directly", () => {
   const command = buildPowerShellDefaultInstallCommand("https://docs.example.test/root");
   const harness = [
-    "function global:Invoke-WebRequest {",
-    "  param([string]$Uri, [string]$OutFile, [int]$TimeoutSec, [switch]$UseBasicParsing)",
-    "  [IO.File]::WriteAllText($OutFile, '')",
+    "$script:attempts = 0",
+    "function global:Invoke-RestMethod {",
+    "  param([string]$Uri, [switch]$UseBasicParsing, [int]$TimeoutSec)",
+    "  $script:attempts += 1",
+    "  throw 'fixture transport failure'",
     "}",
+    "try {",
     command,
+    "} finally { Write-Output \"ATTEMPTS:$script:attempts\" }",
   ].join("\n");
   const result = runPowerShell([
     "-EncodedCommand",
@@ -269,7 +273,8 @@ test("generated PowerShell bootstrap rejects an empty successful response", () =
   ]);
 
   expect(result.status).not.toBe(0);
-  expect(result.stderr).toContain("EggDoc installer response was empty");
+  expect(result.stdout).toContain("ATTEMPTS:1");
+  expect(result.stderr).toContain("fixture transport failure");
 });
 
 test("Codex PowerShell dry-run returns control to the caller", () => {

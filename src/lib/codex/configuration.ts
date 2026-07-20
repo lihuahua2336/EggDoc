@@ -6,7 +6,7 @@ import {
 } from "../installer-command";
 
 export const CODEX_LANGUAGES = ["zh-cn", "en-us"] as const;
-export const CODEX_MODEL_PLACEHOLDER = "gpt-EGGAI-MODEL-ID";
+export const CODEX_DEFAULT_MODEL = "gpt-5.6-sol";
 
 export type CodexLanguage = (typeof CODEX_LANGUAGES)[number];
 
@@ -48,11 +48,10 @@ export function buildShellInstallCommand({
     argumentsText:
       "--eggai " +
     `--sk-key ${quoteShellArgument(apiKey)} ` +
-    `--baseurl ${quoteShellArgument(baseUrl)} ` +
-    `--language ${quoteShellArgument(language)} ` +
+      `--baseurl ${quoteShellArgument(baseUrl)} ` +
+      `--language ${quoteShellArgument(language)} ` +
       `--model ${quoteShellArgument(model)}`,
     scriptUrl,
-    successCommand: '. "${CODEX_HOME:-$HOME/.codex}/eggai.env"',
   });
 }
 
@@ -71,22 +70,14 @@ export function buildPowerShellInstallCommand({
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
 
-  return (
-    `& { $eggdocHadCodexEnvScope=Test-Path Env:EGGAI_CODEX_ENV_SCOPE; ` +
-    `$eggdocPreviousCodexEnvScope=$env:EGGAI_CODEX_ENV_SCOPE; try { ` +
-    `$env:EGGAI_CODEX_ENV_SCOPE='User'; ` +
-      buildPowerShellInstallerCommand({
-        argumentsText:
-          `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} ` +
-          `-BaseUrl ${quotePowerShellArgument(baseUrl)} ` +
-          `-Language ${quotePowerShellArgument(language)} ` +
-          `-Model ${quotePowerShellArgument(model)}`,
-        scriptUrl,
-      }) +
-    ` } finally { if ($eggdocHadCodexEnvScope) { ` +
-    `$env:EGGAI_CODEX_ENV_SCOPE=$eggdocPreviousCodexEnvScope ` +
-    `} else { Remove-Item Env:EGGAI_CODEX_ENV_SCOPE -ErrorAction SilentlyContinue } } }`
-  );
+  return buildPowerShellInstallerCommand({
+    argumentsText:
+      `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} ` +
+      `-BaseUrl ${quotePowerShellArgument(baseUrl)} ` +
+      `-Language ${quotePowerShellArgument(language)} ` +
+      `-Model ${quotePowerShellArgument(model)}`,
+    scriptUrl,
+  });
 }
 
 export function buildCodexConfigToml({
@@ -118,6 +109,10 @@ export function selectCodexModel(modelNames: string[]) {
     const basename = name.toLowerCase().split("/").at(-1) ?? "";
     return /^gpt-\d/.test(basename);
   });
+  const preferred = candidates.find(
+    (name) => (name.toLowerCase().split("/").at(-1) ?? "") === CODEX_DEFAULT_MODEL,
+  );
+  if (preferred) return preferred;
   return [...candidates].sort((left, right) =>
     right.localeCompare(left, undefined, { numeric: true, sensitivity: "base" }),
   )[0];

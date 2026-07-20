@@ -17,7 +17,7 @@ test("default commands install Claude Code without changing its provider", () =>
 
   expect(shell).toContain("'https://docs.example.test/root/install/claude-code.sh'");
   expect(powerShell).toContain(
-    "Invoke-WebRequest -Uri 'https://docs.example.test/root/install/claude-code.ps1'",
+    "Invoke-RestMethod -UseBasicParsing -Uri 'https://docs.example.test/root/install/claude-code.ps1'",
   );
   expect(powerShell).not.toContain("| iex");
 });
@@ -55,12 +55,12 @@ test("EggAi commands safely quote the selected Claude Code credential and URL", 
     });
 
   expect(powerShellCommand).toContain(
-    "Invoke-WebRequest -Uri 'https://docs.example.test/root''s/install/claude-code.ps1'",
+    "Invoke-RestMethod -UseBasicParsing -Uri 'https://docs.example.test/root''s/install/claude-code.ps1'",
   );
-  expect(powerShellCommand).toContain("-SkKey ''sk-reader''''s-$HOME; `exit`''");
-  expect(powerShellCommand).toContain("-BaseUrl ''https://api.example.test''");
-  expect(powerShellCommand).toContain("-FableModel ''claude-fable-5''");
-  expect(powerShellCommand).not.toContain("ScriptBlock");
+  expect(powerShellCommand).toContain("-SkKey 'sk-reader''s-$HOME; `exit`'");
+  expect(powerShellCommand).toContain("-BaseUrl 'https://api.example.test'");
+  expect(powerShellCommand).toContain("-FableModel 'claude-fable-5'");
+  expect(powerShellCommand).toContain("scriptblock");
 });
 
 test("Claude Code assigns the preferred EggAi model for each model role", () => {

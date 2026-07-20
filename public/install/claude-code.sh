@@ -26,9 +26,9 @@ SETTINGS_FILE="$CLAUDE_HOME/settings.json"
 usage() {
   cat <<'EOF'
 Usage:
-  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/claude-code.sh && [ -s "$installer" ] && sh "$installer")
-  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/claude-code.sh && [ -s "$installer" ] && sh "$installer" --eggai --sk-key sk-... --model claude-...)
-  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/claude-code.sh && [ -s "$installer" ] && sh "$installer" --version stable)
+  curl -fsSL 'https://doc.eggai.icu/install/claude-code.sh' | sh -s --
+  curl -fsSL 'https://doc.eggai.icu/install/claude-code.sh' | sh -s -- --eggai --sk-key sk-... --model claude-...
+  curl -fsSL 'https://doc.eggai.icu/install/claude-code.sh' | sh -s -- --version stable
 
 Options:
   --eggai            Configure Claude Code to use EggAi after installation.

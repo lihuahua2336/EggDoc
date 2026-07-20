@@ -24,8 +24,15 @@ test("a Windows browser starts with the provider-neutral PowerShell command", as
   );
   await panel.getByRole("button", { name: "复制安装命令" }).click();
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
-    "Invoke-WebRequest -Uri 'https://doc.eggai.icu/install/codex.ps1'",
+    "Invoke-RestMethod -UseBasicParsing -Uri 'https://doc.eggai.icu/install/codex.ps1'",
   );
+  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
+    "[scriptblock]::Create",
+  );
+  const command = panel.getByTestId("codex-quick-command");
+  await expect(panel.getByText("PowerShell", { exact: true })).toBeVisible();
+  await expect(command).toHaveCSS("overflow-x", "auto");
+  await expect(command.locator("code")).toHaveCSS("white-space", "nowrap");
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.not.toContain("| iex");
 });
 

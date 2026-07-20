@@ -42,8 +42,8 @@ test("an authenticated Reader can copy a one-step EggAi Shell command", async ({
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
     `--eggai --sk-key '${FIXTURE_KEY}' --baseurl 'https://api.fixture.eggai.test/v1' --language 'zh-cn' --model 'gpt-5.2'`,
   );
-  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
-    '. "${CODEX_HOME:-$HOME/.codex}/eggai.env"',
+  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.not.toContain(
+    "eggai.env",
   );
 
   await panel.getByText("分别复制配置", { exact: true }).click();

@@ -15,7 +15,7 @@ test("default commands install Codex without selecting a third-party provider", 
 
   expect(shell).toContain("'https://docs.example.test/root/install/codex.sh'");
   expect(powerShell).toContain(
-    "Invoke-WebRequest -Uri 'https://docs.example.test/root/install/codex.ps1'",
+    "Invoke-RestMethod -UseBasicParsing -Uri 'https://docs.example.test/root/install/codex.ps1'",
   );
   expect(powerShell).not.toContain("| iex");
 });
@@ -32,7 +32,7 @@ test("Shell configuration safely quotes the selected credential, URL, and langua
   expect(command).toContain("--sk-key 'sk-reader'\"'\"'s-$HOME'");
   expect(command).toContain("--baseurl 'https://api.example.test/v1?group=reader'\"'\"'s'");
   expect(command).toContain("--language 'en-us' --model 'openai/gpt-5.10-codex'");
-  expect(command).toContain('&& . "${CODEX_HOME:-$HOME/.codex}/eggai.env"');
+  expect(command).not.toContain("eggai.env");
 });
 
 test("PowerShell configuration safely quotes the selected credential, URL, language, and installer", () => {
@@ -44,11 +44,14 @@ test("PowerShell configuration safely quotes the selected credential, URL, langu
       model: "gpt-5.6-sol",
     });
 
-  expect(command).toContain("Invoke-WebRequest -Uri 'https://docs.example.test/root''s/install/codex.ps1'");
-  expect(command).toContain("-SkKey ''sk-reader''''s-$HOME; `exit`''");
-  expect(command).toContain("-BaseUrl ''https://api.example.test/v1?group=reader''''s&value=$HOME''");
-  expect(command).toContain("-Language ''en-us'' -Model ''gpt-5.6-sol''");
-  expect(command).not.toContain("ScriptBlock");
+  expect(command).toContain(
+    "Invoke-RestMethod -UseBasicParsing -Uri 'https://docs.example.test/root''s/install/codex.ps1'",
+  );
+  expect(command).toContain("-SkKey 'sk-reader''s-$HOME; `exit`'");
+  expect(command).toContain("-BaseUrl 'https://api.example.test/v1?group=reader''s&value=$HOME'");
+  expect(command).toContain("-Language 'en-us' -Model 'gpt-5.6-sol'");
+  expect(command).toContain("scriptblock");
+  expect(command).not.toContain("EGGAI_CODEX_ENV_SCOPE");
 });
 
 test("Codex provider configuration escapes TOML and never contains the API key", () => {

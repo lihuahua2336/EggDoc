@@ -24,8 +24,8 @@ EGGAI_ENV_FILE="$CODEX_HOME/eggai.env"
 usage() {
   cat <<'EOF'
 Usage:
-  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/codex.sh && [ -s "$installer" ] && sh "$installer")
-  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/codex.sh && [ -s "$installer" ] && sh "$installer" --eggai --sk-key sk-... --model gpt-...) && . "${CODEX_HOME:-$HOME/.codex}/eggai.env"
+  curl -fsSL 'https://doc.eggai.icu/install/codex.sh' | sh -s --
+  curl -fsSL 'https://doc.eggai.icu/install/codex.sh' | sh -s -- --eggai --sk-key sk-... --model gpt-...
 
 Options:
   --eggai              Configure Codex to use EggAi after installation.

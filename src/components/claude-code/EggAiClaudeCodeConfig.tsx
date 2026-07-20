@@ -51,11 +51,13 @@ function QuickCopyCommand({
   command,
   disabled,
   disabledLabel,
+  platform,
   resetKey,
 }: {
   command: string;
   disabled: boolean;
   disabledLabel: string;
+  platform: Platform;
   resetKey: string;
 }) {
   const [status, setStatus] = useState<CopyStatus>("idle");
@@ -74,7 +76,7 @@ function QuickCopyCommand({
   return (
     <div className="mt-5 min-w-0 overflow-hidden rounded-sm border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
-        <span>{command.startsWith("$") ? "PowerShell" : "Shell"}</span>
+        <span>{platform === "windows" ? "PowerShell" : "Shell"}</span>
         <Button
           aria-label={
             disabled
@@ -99,10 +101,10 @@ function QuickCopyCommand({
         </Button>
       </div>
       <pre
-        className="m-0 max-h-44 w-full max-w-full min-w-0 overflow-auto border-0 bg-card p-4 text-sm leading-6 text-foreground"
+        className="m-0 w-full max-w-full min-w-0 overflow-x-auto overflow-y-hidden border-0 bg-card p-4 text-sm leading-6 text-foreground"
         data-testid="claude-code-quick-command"
       >
-        <code className="block !min-w-0 max-w-full whitespace-pre-wrap break-all">{command}</code>
+        <code className="block w-max min-w-full whitespace-nowrap">{command}</code>
       </pre>
       {status === "error" && (
         <p className="border-t border-border px-4 py-2 text-sm text-destructive" role="status">
@@ -375,6 +377,7 @@ export function EggAiClaudeCodeConfig() {
           command={command}
           disabled={mode === "eggai" && (!selectedCredential || !claudeModels)}
           disabledLabel={selectedCredential ? "暂无可用 Claude 模型" : "登录 EggAi 后复制"}
+          platform={platform}
           resetKey={`${mode}\u0000${platform}\u0000${apiKey}\u0000${baseUrl}\u0000${JSON.stringify(claudeModels)}`}
         />
 
