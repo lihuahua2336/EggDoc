@@ -2,11 +2,13 @@
 
 调研日期：2026-07-17
 
+实现更新：2026-07-20。下文保留原生安装器的官方事实记录；EggDoc 当前实现已按 ADR 0033 和 ADR 0035 改为检测/安装 Node.js 22，并通过 `https://registry.npmmirror.com` 安装官方 npm 包 `@anthropic-ai/claude-code`。
+
 范围：仅使用 Anthropic 官方 Claude Code 文档、Anthropic 官方安装端点和 Anthropic 官方 GitHub 仓库。本文用于约束 EggDoc 一键安装脚本的实现，不是面向最终用户的安装教程。
 
 ## 结论
 
-EggDoc 可以提供一个很薄的一键安装包装器：按用户当前平台调用 Anthropic 推荐的原生安装器，透传 `latest`、`stable` 或具体版本，检查安装命令的退出状态，并用 `claude --version` 验证结果。包装器不应自行下载、拼装或替换 Claude Code 二进制，也不应把“安装完成”描述成“登录完成”。
+Anthropic 同时提供原生安装器和官方 npm 包。EggDoc 当前选择 npm 路径以便为中国大陆用户显式使用可访问的 npm 镜像，同时继续使用 Anthropic 官方包名、支持 `latest`、`stable` 或具体版本，并用 `claude --version` 验证结果。EggDoc 不自行拼装或替换 Claude Code 二进制，也不把“安装完成”描述成“登录完成”。
 
 官方推荐的原生安装命令是：
 
@@ -158,16 +160,16 @@ winget uninstall Anthropic.ClaudeCode
 
 包装器可以承诺：
 
-- 调用 Anthropic 当前文档推荐的原生安装器。
-- 支持 macOS/Linux/WSL 与 Windows PowerShell，并按需透传官方支持的发布通道或明确版本。
-- 在官方安装器正常退出后刷新/提示 PATH，并运行 `claude --version` 验证命令是否可用。
+- 检测 Node.js 22，在缺失或过旧时使用 Node.js 官方发布源或精确 winget 包自动安装。
+- 通过官方 npm 包支持 macOS/Linux/WSL 与 Windows PowerShell，并按需透传官方支持的发布通道或明确版本。
+- npm 安装正常退出后刷新/持久化 PATH，并运行 `claude --version` 验证命令是否可用。
 - 安装失败时保留官方错误信息和非零退出状态，不伪造成功结果。
 
 包装器不能承诺：
 
 - 在 Anthropic 不支持的国家或地区、受限网络、代理或 TLS 拦截环境中一定成功。官方文档明确列出地区限制，并记录安装端点可能返回 HTML、403 或连接错误。来源：[System requirements](https://code.claude.com/docs/en/setup#system-requirements)、[Troubleshoot installation and login](https://code.claude.com/docs/en/troubleshoot-install#find-your-error)。
 - 自动完成 Claude 账户登录、订阅资格检查或第三方提供商认证。
-- 修改 Anthropic 安装器内部行为、替 Anthropic 固定二进制内容，或保证未来安装端点永不变化。
+- 修改 Anthropic npm 包内容、替 Anthropic 固定二进制内容，或保证未来 npm 包和发布标签永不变化。
 - 在 Alpine 等特殊发行版上自动满足全部系统依赖，除非 EggDoc 明确实现并测试对应分支。
 - 删除用户的 `~/.claude`、`~/.claude.json`、`.claude` 或 `.mcp.json`。
 

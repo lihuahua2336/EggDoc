@@ -141,6 +141,7 @@ test("PowerShell bootstrap retries, validates content, isolates execution, and c
   expect(command).toContain("-EggAi -Model ''gpt-5.6-sol''");
   expect(command).toContain("-EncodedCommand',$eggdocEncodedCommand");
   expect(command).toContain("$eggdocProcess.ExitCode");
+  expect(command).toContain("GetEnvironmentVariable('Path','User')");
   expect(command).toContain("finally { Remove-Item");
   expect(command).toMatch(/^& \{ /);
   expect(command).not.toContain("$global:LASTEXITCODE");

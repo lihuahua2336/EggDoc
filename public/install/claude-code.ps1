@@ -15,8 +15,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$OfficialInstallerUrl = "https://claude.ai/install.ps1"
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY } else { "https://registry.npmmirror.com" }
+$NpmPackage = "@anthropic-ai/claude-code"
+$NodeMinimumMajor = 22
+$NodeWingetPackageId = "OpenJS.NodeJS.LTS"
+$PathEnvironmentScope = if ($env:EGGDOC_CLAUDE_PATH_SCOPE) { $env:EGGDOC_CLAUDE_PATH_SCOPE } else { "User" }
+$OfficialNodeDirectory = if ($env:EGGDOC_NODE_INSTALL_DIR) {
+  $env:EGGDOC_NODE_INSTALL_DIR
+} elseif ($env:ProgramFiles) {
+  Join-Path $env:ProgramFiles "nodejs"
+} else {
+  $null
+}
 $GatewayTimeoutSeconds = if ($env:EGGDOC_GATEWAY_TIMEOUT_SECONDS) { $env:EGGDOC_GATEWAY_TIMEOUT_SECONDS } else { "60" }
 if ([string]::IsNullOrWhiteSpace($Version)) {
   $Version = if ($env:CLAUDE_CODE_VERSION) { $env:CLAUDE_CODE_VERSION } else { "latest" }
@@ -49,26 +59,180 @@ function Throw-InstallError {
   throw "Claude Code installer failed: $Message"
 }
 
-function Add-ClaudeBinToPath {
-  $userHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
-  $claudeBin = Join-Path $userHome ".local\bin"
-  $claudeExe = Join-Path $claudeBin "claude.exe"
+function Get-NodeRuntime {
+  param([string]$PreferredDirectory)
 
-  if ((Test-Path -LiteralPath $claudeExe) -and ($env:PATH -notlike "*$claudeBin*")) {
-    $env:PATH = "$claudeBin;$env:PATH"
+  $nodeSource = $null
+  $npmSource = $null
+  if (-not [string]::IsNullOrWhiteSpace($PreferredDirectory)) {
+    $preferredNode = Join-Path $PreferredDirectory "node.exe"
+    $preferredNpm = Join-Path $PreferredDirectory "npm.cmd"
+    if ((Test-Path -LiteralPath $preferredNode -PathType Leaf) -and (Test-Path -LiteralPath $preferredNpm -PathType Leaf)) {
+      $nodeSource = $preferredNode
+      $npmSource = $preferredNpm
+    }
+  }
+  if (-not $nodeSource) {
+    $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+    $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if ($nodeCommand -and $npmCommand) {
+      $nodeSource = $nodeCommand.Source
+      $npmSource = $npmCommand.Source
+    }
+  }
+  if (-not $nodeSource -or -not $npmSource) {
+    return $null
+  }
+
+  try {
+    $global:LASTEXITCODE = 0
+    $majorOutput = & $nodeSource -p 'process.versions.node.split(".")[0]'
+    if ($LASTEXITCODE -ne 0) { return $null }
+    $major = 0
+    if (-not [int]::TryParse(($majorOutput -join "").Trim(), [ref]$major)) { return $null }
+    $versionOutput = & $nodeSource --version
+    if ($LASTEXITCODE -ne 0) { return $null }
+    return [pscustomobject]@{
+      Major = $major
+      NodeCommand = $nodeSource
+      NpmCommand = $npmSource
+      Version = ($versionOutput -join "").Trim()
+    }
+  } catch {
+    return $null
   }
 }
 
-function Get-TemporaryDirectory {
-  $temporaryDirectory = if (-not [string]::IsNullOrWhiteSpace($env:TEMP)) {
-    $env:TEMP
-  } elseif (-not [string]::IsNullOrWhiteSpace($env:TMP)) {
-    $env:TMP
-  } else {
-    [IO.Path]::GetTempPath()
+function Update-ProcessPath {
+  $pathParts = New-Object System.Collections.Generic.List[string]
+  foreach ($candidate in @(
+    $env:PATH,
+    [Environment]::GetEnvironmentVariable("Path", "User"),
+    [Environment]::GetEnvironmentVariable("Path", "Machine")
+  )) {
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      $pathParts.Add($candidate)
+    }
   }
-  New-Item -ItemType Directory -Force -Path $temporaryDirectory | Out-Null
-  $temporaryDirectory
+  $env:PATH = $pathParts -join ";"
+}
+
+function Install-NodeRuntime {
+  $wingetCommand = Get-Command winget -ErrorAction SilentlyContinue
+  if (-not $wingetCommand) {
+    Throw-InstallError "Node.js $NodeMinimumMajor or newer is required, and winget is unavailable. Install the official Node.js LTS release and retry."
+  }
+
+  Write-Host "Installing Node.js LTS with winget..."
+  $global:LASTEXITCODE = 0
+  & $wingetCommand.Source install `
+    --id $NodeWingetPackageId `
+    --exact `
+    --source winget `
+    --accept-package-agreements `
+    --accept-source-agreements `
+    --silent `
+    --disable-interactivity | ForEach-Object { Write-Host $_ }
+  $wingetExitCode = $LASTEXITCODE
+  if ($wingetExitCode -ne 0) {
+    Throw-InstallError "winget could not install the official Node.js LTS package (exit code $wingetExitCode)."
+  }
+  Update-ProcessPath
+}
+
+function Ensure-NodeRuntime {
+  $runtime = Get-NodeRuntime
+  if ($runtime -and $runtime.Major -ge $NodeMinimumMajor) {
+    Write-Host "Using Node.js $($runtime.Version)."
+    return $runtime
+  }
+
+  if ($runtime) {
+    Write-Host "Node.js $($runtime.Version) is older than the required version $NodeMinimumMajor."
+  } else {
+    Write-Host "Node.js $NodeMinimumMajor or newer was not found."
+  }
+  Install-NodeRuntime
+  $runtime = Get-NodeRuntime -PreferredDirectory $OfficialNodeDirectory
+  if (-not $runtime -or $runtime.Major -lt $NodeMinimumMajor) {
+    Throw-InstallError "Node.js $NodeMinimumMajor or newer and npm.cmd are required, but verification failed after winget installation. Restart PowerShell and retry."
+  }
+  Write-Host "Using Node.js $($runtime.Version)."
+  return $runtime
+}
+
+function Add-NpmGlobalBinToPath {
+  param([string]$NpmCommand)
+
+  $global:LASTEXITCODE = 0
+  $prefixOutput = & $NpmCommand prefix --global
+  if ($LASTEXITCODE -ne 0) {
+    Throw-InstallError "npm could not report its global installation directory."
+  }
+  $globalPrefix = ($prefixOutput -join [Environment]::NewLine).Trim()
+  if ([string]::IsNullOrWhiteSpace($globalPrefix)) {
+    Throw-InstallError "npm returned an empty global installation directory."
+  }
+  $normalizedPrefix = [IO.Path]::GetFullPath($globalPrefix).TrimEnd("\", "/")
+  $processEntries = @($env:PATH -split ";" | ForEach-Object { $_.Trim().TrimEnd("\", "/") })
+  if (-not ($processEntries | Where-Object { [string]::Equals($_, $normalizedPrefix, [StringComparison]::OrdinalIgnoreCase) })) {
+    $env:PATH = "$globalPrefix;$env:PATH"
+  }
+  if ($PathEnvironmentScope -eq "User") {
+    $previousUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $userEntries = @($previousUserPath -split ";" | ForEach-Object { $_.Trim().TrimEnd("\", "/") })
+    if (-not ($userEntries | Where-Object { [string]::Equals($_, $normalizedPrefix, [StringComparison]::OrdinalIgnoreCase) })) {
+      $newUserPath = if ([string]::IsNullOrWhiteSpace($previousUserPath)) {
+        $globalPrefix
+      } else {
+        "$previousUserPath;$globalPrefix"
+      }
+      try {
+        [Environment]::SetEnvironmentVariable("Path", $newUserPath, "User")
+        $savedUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        $savedEntries = @($savedUserPath -split ";" | ForEach-Object { $_.Trim().TrimEnd("\", "/") })
+        if (-not ($savedEntries | Where-Object { [string]::Equals($_, $normalizedPrefix, [StringComparison]::OrdinalIgnoreCase) })) {
+          throw "the saved user PATH did not contain the npm global directory"
+        }
+        Publish-EnvironmentChange
+      } catch {
+        try {
+          [Environment]::SetEnvironmentVariable("Path", $previousUserPath, "User")
+        } catch {
+          Throw-InstallError "could not persist the npm global directory and could not restore the previous user PATH."
+        }
+        Throw-InstallError "could not persist the npm global directory in the user PATH. The previous user PATH was restored."
+      }
+    }
+  }
+  return $globalPrefix
+}
+
+function Publish-EnvironmentChange {
+  if ($PathEnvironmentScope -ne "User") { return }
+  try {
+    if (-not ("EggDocEnvironmentBroadcast" -as [type])) {
+      Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class EggDocEnvironmentBroadcast {
+  [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  public static extern IntPtr SendMessageTimeout(
+    IntPtr hWnd, uint message, UIntPtr wParam, string lParam,
+    uint flags, uint timeout, out UIntPtr result);
+}
+"@
+    }
+    [UIntPtr]$broadcastResult = [UIntPtr]::Zero
+    $broadcastStatus = [EggDocEnvironmentBroadcast]::SendMessageTimeout(
+      [IntPtr]0xffff, 0x001a, [UIntPtr]::Zero, "Environment", 0x0002, 5000, [ref]$broadcastResult
+    )
+    if ($broadcastStatus -eq [IntPtr]::Zero) {
+      Write-Warning "The user PATH was saved, but Windows did not confirm the environment notification. Open a new terminal before using claude."
+    }
+  } catch {
+    Write-Warning "The user PATH was saved, but Windows could not notify running applications. Open a new terminal before using claude."
+  }
 }
 
 function Get-AnthropicBaseUrl {
@@ -178,6 +342,9 @@ function Update-ClaudeSettings {
 if ($Version -ne "latest" -and $Version -ne "stable" -and $Version -notmatch "^\d+(\.\d+){2,}$") {
   Throw-InstallError "version must be latest, stable, or a numeric dotted version."
 }
+if ($PathEnvironmentScope -ne "User" -and $PathEnvironmentScope -ne "Process") {
+  Throw-InstallError "EGGDOC_CLAUDE_PATH_SCOPE must be User or Process."
+}
 
 $parsedGatewayTimeoutSeconds = 0
 if (-not [int]::TryParse([string]$GatewayTimeoutSeconds, [ref]$parsedGatewayTimeoutSeconds) -or $parsedGatewayTimeoutSeconds -lt 1) {
@@ -206,8 +373,11 @@ $settingsFile = Join-Path $claudeHome "settings.json"
 if ($DryRun) {
   Write-Host "Claude Code installer dry run"
   Write-Host "Mode: $(if ($EggAiMode) { 'eggai' } else { 'default' })"
-  Write-Host "Official installer URL: $OfficialInstallerUrl"
-  Write-Host "npm registry for installer subprocesses: $NpmRegistry"
+  Write-Host "Node.js requirement: >=$NodeMinimumMajor"
+  Write-Host "Node.js automatic install: winget $NodeWingetPackageId"
+  Write-Host "npm package: $NpmPackage@$Version"
+  Write-Host "npm registry: $NpmRegistry"
+  Write-Host "PATH persistence scope: $PathEnvironmentScope"
   Write-Host "Release: $Version"
   Write-Host "Would install/update Claude Code: yes"
   if ($EggAiMode) {
@@ -287,65 +457,48 @@ if ($EggAiMode) {
   }
 }
 
-$temporaryInstaller = Join-Path (Get-TemporaryDirectory) "eggdoc-claude-code-$([guid]::NewGuid()).ps1"
-
+$nodeRuntime = Ensure-NodeRuntime
+Write-Host "Installing or updating Claude Code from npm..."
+$previousNpmRegistry = $env:NPM_CONFIG_REGISTRY
 try {
-  Write-Host "Installing or updating Claude Code from Anthropic..."
-  try {
-    Invoke-WebRequest -Uri $OfficialInstallerUrl -OutFile $temporaryInstaller -TimeoutSec 300 -UseBasicParsing
-  } catch {
-    Throw-InstallError "could not download the Anthropic installer: $($_.Exception.Message) Check network and region availability."
-  }
-
-  $installerSource = Get-Content -LiteralPath $temporaryInstaller -Raw
-  if ([string]::IsNullOrWhiteSpace($installerSource)) {
-    Throw-InstallError "the Anthropic installer response was empty."
-  }
-  if ($installerSource.TrimStart().StartsWith("<")) {
-    Throw-InstallError "the Anthropic installer returned HTML instead of a script. Check network and region availability."
-  }
-
-  $powerShellExecutable = if ($PSVersionTable.PSEdition -eq "Core") {
-    Join-Path $PSHOME "pwsh.exe"
-  } else {
-    Join-Path $PSHOME "powershell.exe"
-  }
-  if (-not (Test-Path -LiteralPath $powerShellExecutable -PathType Leaf)) {
-    Throw-InstallError "the current PowerShell executable could not be found."
-  }
-  $previousNpmRegistry = $env:NPM_CONFIG_REGISTRY
-  try {
-    $env:NPM_CONFIG_REGISTRY = $NpmRegistry
-    $global:LASTEXITCODE = 0
-    & $powerShellExecutable `
-      -NoLogo `
-      -NoProfile `
-      -NonInteractive `
-      -ExecutionPolicy Bypass `
-      -File $temporaryInstaller `
-      $Version
-    $installerExitCode = $LASTEXITCODE
-    if ($installerExitCode -ne 0) {
-      Throw-InstallError "the Anthropic installer exited with code $installerExitCode."
-    }
-  } finally {
-    if ($null -eq $previousNpmRegistry) {
-      Remove-Item Env:NPM_CONFIG_REGISTRY -ErrorAction SilentlyContinue
-    } else {
-      $env:NPM_CONFIG_REGISTRY = $previousNpmRegistry
-    }
+  $env:NPM_CONFIG_REGISTRY = $NpmRegistry
+  $global:LASTEXITCODE = 0
+  & $nodeRuntime.NpmCommand install `
+    --global `
+    "$NpmPackage@$Version" `
+    --registry $NpmRegistry `
+    --include=optional `
+    --no-audit `
+    --no-fund
+  $npmExitCode = $LASTEXITCODE
+  if ($npmExitCode -ne 0) {
+    Throw-InstallError "npm could not install $NpmPackage from $NpmRegistry (exit code $npmExitCode)."
   }
 } finally {
-  Remove-Item -LiteralPath $temporaryInstaller -Force -ErrorAction SilentlyContinue
+  if ($null -eq $previousNpmRegistry) {
+    Remove-Item Env:NPM_CONFIG_REGISTRY -ErrorAction SilentlyContinue
+  } else {
+    $env:NPM_CONFIG_REGISTRY = $previousNpmRegistry
+  }
 }
 
-Add-ClaudeBinToPath
+$npmGlobalPrefix = Add-NpmGlobalBinToPath -NpmCommand $nodeRuntime.NpmCommand
 $claudeCommand = Get-Command claude -ErrorAction SilentlyContinue
+$claudeExecutable = if ($claudeCommand) { $claudeCommand.Source } else { $null }
 if (-not $claudeCommand) {
+  foreach ($candidateName in @("claude.cmd", "claude.exe")) {
+    $candidate = Join-Path $npmGlobalPrefix $candidateName
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+      $claudeExecutable = $candidate
+      break
+    }
+  }
+}
+if (-not $claudeExecutable) {
   Throw-InstallError "Claude Code was installed, but claude is not on PATH. Restart PowerShell and run claude --version."
 }
 
-$versionOutput = & $claudeCommand.Source --version
+$versionOutput = & $claudeExecutable --version
 if ($LASTEXITCODE -ne 0) {
   Throw-InstallError "claude --version failed after installation."
 }

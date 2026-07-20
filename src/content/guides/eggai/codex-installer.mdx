@@ -3,7 +3,7 @@ type: guide
 title: Codex 安装
 description: 复制一条命令安装 Codex；需要时可切换到 EggAi 配置，一次完成安装与 API 接入。
 publishedAt: 2026-07-03
-updatedAt: 2026-07-17
+updatedAt: 2026-07-20
 tags: [install, codex, eggai]
 draft: false
 order: 10
@@ -26,6 +26,8 @@ codex --version
 ```
 
 看到版本号即表示 Codex CLI 安装完成。
+
+macOS、Linux 和 WSL 脚本会先检测 Node.js 和 npm。Node.js 缺失或版本过低时，脚本从 `nodejs.org` 下载并校验 Node 22，再通过 `https://registry.npmmirror.com` 安装官方包 `@openai/codex@latest`。npm 镜像只用于本次安装命令，不会永久修改用户 npm 配置。
 
 Windows 安装结束后，在开始菜单打开 Codex。脚本会核对 Microsoft Store 产品 `9PLM9XGG6VKS` 安装出的包族 `OpenAI.Codex_2p2nqsd0c76g0`，不会把同名第三方应用或 Codex CLI 当成桌面应用。使用 EggAi 配置后请重启 Codex 桌面应用，让它读取新的用户环境变量和配置。
 

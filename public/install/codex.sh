@@ -10,8 +10,13 @@ MODEL="${MODEL:-${CODEX_MODEL:-}}"
 DRY_RUN="${DRY_RUN:-0}"
 GATEWAY_TIMEOUT_SECONDS="${EGGDOC_GATEWAY_TIMEOUT_SECONDS:-60}"
 EGGAI_MODE=0
-OFFICIAL_INSTALLER_URL="https://chatgpt.com/codex/install.sh"
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
+NPM_PREFIX="$HOME/.local"
+NPM_PACKAGE="@openai/codex"
+NODE_MINIMUM_MAJOR=16
+NODE_RELEASE_LINE=22
+NODE_RELEASE_URL="https://nodejs.org/dist/latest-v${NODE_RELEASE_LINE}.x"
+NODE_INSTALL_ROOT="$HOME/.local/share/eggdoc-node"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 CONFIG_FILE="$CODEX_HOME/config.toml"
 EGGAI_ENV_FILE="$CODEX_HOME/eggai.env"
@@ -33,8 +38,8 @@ Options:
 
 Environment variables are also supported:
   SK_KEY, EGGAI_API_KEY, BASE_URL, LANGUAGE, MODEL, CODEX_HOME,
-  CODEX_INSTALL_DIR, CODEX_NON_INTERACTIVE, CODEX_PROFILE,
-  EGGDOC_GATEWAY_TIMEOUT_SECONDS, NPM_CONFIG_REGISTRY, DRY_RUN
+  CODEX_PROFILE, EGGDOC_GATEWAY_TIMEOUT_SECONDS,
+  NPM_CONFIG_REGISTRY, DRY_RUN
 EOF
 }
 
@@ -242,11 +247,144 @@ select_shell_profile() {
   esac
 }
 
+download_node_file() {
+  node_url="$1"
+  node_output="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --retry 2 --connect-timeout 15 --max-time 300 -o "$node_output" -- "$node_url"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q --timeout=15 --tries=3 -O "$node_output" "$node_url"
+  else
+    fail "curl or wget is required to install Node.js."
+  fi
+}
+
+node_runtime_is_usable() {
+  command -v node >/dev/null 2>&1 || return 1
+  command -v npm >/dev/null 2>&1 || return 1
+  node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)"
+  case "$node_major" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$node_major" -ge "$NODE_MINIMUM_MAJOR" ]
+}
+
+node_archive_digest() {
+  node_archive="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$node_archive" | awk '{ print $1 }'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$node_archive" | awk '{ print $1 }'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$node_archive" | awk '{ print $NF }'
+  else
+    fail "sha256sum, shasum, or openssl is required to verify Node.js."
+  fi
+}
+
+install_node_runtime() (
+  command -v mktemp >/dev/null 2>&1 || fail "mktemp is required to install Node.js."
+  command -v tar >/dev/null 2>&1 || fail "tar is required to install Node.js."
+
+  case "$(uname -s)" in
+    Darwin) node_platform="darwin" ;;
+    Linux) node_platform="linux" ;;
+    *) fail "automatic Node.js installation supports macOS, Linux, and WSL." ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64) node_arch="x64" ;;
+    arm64|aarch64) node_arch="arm64" ;;
+    *) fail "automatic Node.js installation does not support architecture $(uname -m)." ;;
+  esac
+
+  node_tmp="$(mktemp -d "${TMPDIR:-/tmp}/eggdoc-node.XXXXXX")" || fail "could not create a Node.js temporary directory."
+  trap 'rm -rf "$node_tmp"' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  node_checksums="$node_tmp/SHASUMS256.txt"
+  download_node_file "$NODE_RELEASE_URL/SHASUMS256.txt" "$node_checksums" || \
+    fail "could not download Node.js release metadata from nodejs.org."
+  [ -s "$node_checksums" ] || fail "Node.js release metadata was empty."
+
+  node_suffix="-$node_platform-$node_arch.tar.gz"
+  node_archive_name="$(awk -v suffix="$node_suffix" '$2 ~ (suffix "$") { print $2; exit }' "$node_checksums")"
+  [ -n "$node_archive_name" ] || fail "could not find a compatible Node.js archive in the official release metadata."
+  case "$node_archive_name" in
+    */*|*\\*) fail "the Node.js release metadata contained an unsafe archive name." ;;
+  esac
+  node_expected_digest="$(awk -v name="$node_archive_name" '$2 == name { print $1; exit }' "$node_checksums")"
+  case "$node_expected_digest" in
+    *[!0-9a-fA-F]*) fail "could not read the Node.js archive checksum." ;;
+    *) [ "${#node_expected_digest}" -eq 64 ] || fail "could not read the Node.js archive checksum." ;;
+  esac
+
+  node_archive="$node_tmp/$node_archive_name"
+  download_node_file "$NODE_RELEASE_URL/$node_archive_name" "$node_archive" || \
+    fail "could not download Node.js from nodejs.org."
+  [ -s "$node_archive" ] || fail "the Node.js archive was empty."
+  node_actual_digest="$(node_archive_digest "$node_archive")"
+  [ "$node_actual_digest" = "$node_expected_digest" ] || fail "the Node.js archive checksum did not match the official release metadata."
+
+  node_directory_name="${node_archive_name%.tar.gz}"
+  node_extract="$node_tmp/extract"
+  mkdir -p "$node_extract"
+  tar -xzf "$node_archive" -C "$node_extract" || fail "could not extract the Node.js archive."
+  [ -x "$node_extract/$node_directory_name/bin/node" ] || fail "the Node.js archive did not contain the expected node executable."
+  [ -f "$node_extract/$node_directory_name/bin/npm" ] || fail "the Node.js archive did not contain npm."
+
+  mkdir -p "$NODE_INSTALL_ROOT"
+  node_release_dir="$NODE_INSTALL_ROOT/$node_directory_name"
+  if [ ! -d "$node_release_dir" ]; then
+    mv "$node_extract/$node_directory_name" "$node_release_dir" || fail "could not install Node.js in the user directory."
+  fi
+  if [ -e "$NODE_INSTALL_ROOT/current" ] && [ ! -L "$NODE_INSTALL_ROOT/current" ]; then
+    fail "the Node.js activation path exists and is not a symbolic link: $NODE_INSTALL_ROOT/current"
+  fi
+  node_link="$NODE_INSTALL_ROOT/.current.$$"
+  ln -s "$node_release_dir" "$node_link" || fail "could not create the Node.js current-version link."
+  rm -f "$NODE_INSTALL_ROOT/current" || fail "could not replace the previous Node.js current-version link."
+  mv -f "$node_link" "$NODE_INSTALL_ROOT/current" || fail "could not activate the installed Node.js version."
+)
+
+activate_command_path() {
+  PATH="$NODE_INSTALL_ROOT/current/bin:$NPM_PREFIX/bin:$PATH"
+  export PATH
+}
+
+persist_command_path() {
+  profile_file="$(select_shell_profile)"
+  [ ! -L "$profile_file" ] || fail "shell profile must not be a symbolic link: $profile_file"
+  if [ -e "$profile_file" ] && [ ! -f "$profile_file" ]; then
+    fail "shell profile exists but is not a regular file: $profile_file"
+  fi
+  profile_dir="${profile_file%/*}"
+  [ "$profile_dir" != "$profile_file" ] || profile_dir="."
+  mkdir -p "$profile_dir"
+  path_line='export PATH="$HOME/.local/share/eggdoc-node/current/bin:$HOME/.local/bin:$PATH"'
+  if [ ! -f "$profile_file" ] || ! grep -Fqx "$path_line" "$profile_file"; then
+    printf '\n%s\n' "$path_line" >> "$profile_file" || fail "could not add the Node.js and npm user directories to $profile_file."
+  fi
+}
+
+ensure_node_runtime() {
+  if node_runtime_is_usable; then
+    echo "Using Node.js $(node --version)."
+  else
+    echo "Installing Node.js ${NODE_RELEASE_LINE}.x from nodejs.org..."
+    install_node_runtime || fail "automatic Node.js installation failed."
+  fi
+  activate_command_path
+  node_runtime_is_usable || fail "Node.js $NODE_MINIMUM_MAJOR or newer and npm are required, but verification failed after installation."
+}
+
 print_plan() {
   echo "Codex installer dry run"
   echo "Mode: $([ "$EGGAI_MODE" = "1" ] && echo eggai || echo default)"
-  echo "Installer URL: $OFFICIAL_INSTALLER_URL"
-  echo "npm registry for installer subprocesses: $NPM_REGISTRY"
+  echo "Node.js requirement: >=$NODE_MINIMUM_MAJOR"
+  echo "Node.js automatic install source: $NODE_RELEASE_URL"
+  echo "npm package: $NPM_PACKAGE@latest"
+  echo "npm registry: $NPM_REGISTRY"
   echo "Codex home: $CODEX_HOME"
   echo "Would install/update Codex: yes"
 
@@ -302,7 +440,8 @@ fi
 
 command -v mktemp >/dev/null 2>&1 || fail "mktemp is required."
 
-INSTALLER_TMP=""
+ensure_node_runtime
+
 CLEAN_FILE=""
 CONFIG_TMP=""
 BACKUP_TMP=""
@@ -317,7 +456,6 @@ EGGAI_ENV_CHANGED=0
 PROFILE_CHANGED=0
 INSTALL_COMMITTED=0
 cleanup() {
-  [ -z "$INSTALLER_TMP" ] || rm -f "$INSTALLER_TMP"
   [ -z "$CLEAN_FILE" ] || rm -f "$CLEAN_FILE"
   [ -z "$CONFIG_TMP" ] || rm -f "$CONFIG_TMP"
   [ -z "$BACKUP_TMP" ] || rm -f "$BACKUP_TMP"
@@ -330,45 +468,23 @@ trap cleanup EXIT
 trap 'exit 130' HUP INT
 trap 'exit 143' TERM
 
-INSTALLER_TMP="$(mktemp "${TMPDIR:-/tmp}/eggdoc-codex-installer.XXXXXX")" || \
-  fail "could not create a temporary installer file."
-
 say install
-CODEX_NON_INTERACTIVE="${CODEX_NON_INTERACTIVE:-1}"
-export CODEX_NON_INTERACTIVE
 NPM_CONFIG_REGISTRY="$NPM_REGISTRY"
+NPM_CONFIG_PREFIX="$NPM_PREFIX"
 export NPM_CONFIG_REGISTRY
-if command -v curl >/dev/null 2>&1; then
-  if ! curl -fsSL --retry 2 --connect-timeout 15 --max-time 300 \
-    -o "$INSTALLER_TMP" -- "$OFFICIAL_INSTALLER_URL"; then
-    fail "could not download the official Codex installer. Check network and region availability."
-  fi
-elif command -v wget >/dev/null 2>&1; then
-  if ! wget -q --timeout=15 --tries=3 -O "$INSTALLER_TMP" "$OFFICIAL_INSTALLER_URL"; then
-    fail "could not download the official Codex installer. Check network and region availability."
-  fi
-else
-  fail "curl or wget is required."
-fi
-
-[ -s "$INSTALLER_TMP" ] || fail "the official Codex installer response was empty."
-FIRST_CONTENT_LINE="$(sed -n '/[^[:space:]]/ { p; q; }' "$INSTALLER_TMP")"
-[ -n "$FIRST_CONTENT_LINE" ] || fail "the official Codex installer response was empty."
-case "$FIRST_CONTENT_LINE" in
-  \<*) fail "the official Codex installer returned HTML instead of a script. Check network and region availability." ;;
-esac
-
-if sh "$INSTALLER_TMP"; then
+export NPM_CONFIG_PREFIX
+if npm install --global "$NPM_PACKAGE@latest" \
+  --prefix "$NPM_PREFIX" --registry "$NPM_REGISTRY" \
+  --include=optional --no-audit --no-fund; then
   :
 else
-  installer_exit_code=$?
-  fail "the official Codex installer did not complete successfully (exit code $installer_exit_code)."
+  npm_exit_code=$?
+  fail "npm could not install $NPM_PACKAGE from $NPM_REGISTRY (exit code $npm_exit_code)."
 fi
 
 CODEX_COMMAND=""
-CODEX_INSTALL_DIR="${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
 for CODEX_CANDIDATE in \
-  "$CODEX_INSTALL_DIR/codex" \
+  "$NPM_PREFIX/bin/codex" \
   "$CODEX_HOME/bin/codex" \
   "$HOME/bin/codex" \
   "/usr/local/bin/codex"; do
@@ -389,6 +505,7 @@ VERSION_OUTPUT="$("$CODEX_COMMAND" --version)" || fail "codex --version failed a
 [ -n "$VERSION_OUTPUT" ] || fail "codex --version returned no version information."
 
 if [ "$EGGAI_MODE" = "0" ]; then
+  persist_command_path
   say done
   echo "$VERSION_OUTPUT"
   exit 0
@@ -615,6 +732,7 @@ save_eggai_api_key() {
     printf 'EGGAI_API_KEY='
     shell_single_quote "$SK_KEY"
     printf '\nexport EGGAI_API_KEY\n'
+    echo 'export PATH="$HOME/.local/share/eggdoc-node/current/bin:$HOME/.local/bin:$PATH"'
   } > "$EGGAI_ENV_TMP" || return 1
 
   PROFILE_FILE="$(select_shell_profile)"

@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -80,6 +81,7 @@ function runWithInstallerFixture(
     removeBackupAfterFirstRun?: boolean;
     runs?: number;
     signalAfterConfigWrite?: boolean;
+    automaticNode?: boolean;
   } = {},
 ) {
   const root = mkdtempSync(path.join(tmpdir(), "eggdoc-codex-shell-"));
@@ -88,10 +90,35 @@ function runWithInstallerFixture(
   const temporaryFiles = path.join(root, "tmp");
   const fixture = path.join(root, "installer.sh");
   const codexLog = path.join(root, "codex.log");
+  const npmLog = path.join(root, "npm.log");
   mkdirSync(bin);
   mkdirSync(home);
   mkdirSync(temporaryFiles);
   writeFileSync(fixture, installerSource);
+  let nodeChecksums: string | undefined;
+  let nodeArchive: string | undefined;
+  if (options.automaticNode) {
+    const releaseName = "node-v22.99.0-linux-x64";
+    const releaseParent = path.join(root, "node-release");
+    const releaseBin = path.join(releaseParent, releaseName, "bin");
+    mkdirSync(releaseBin, { recursive: true });
+    const nodeRuntime = path.join(releaseBin, "node");
+    const npmRuntime = path.join(releaseBin, "npm");
+    writeFileSync(nodeRuntime, "#!/bin/sh\ncase \"$1\" in -p) echo 22 ;; --version) echo v22.99.0 ;; *) exit 64 ;; esac\n");
+    writeFileSync(npmRuntime, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FAKE_NPM_LOG\"\nsh \"$FAKE_INSTALLER_SOURCE\"\n");
+    chmodSync(nodeRuntime, 0o755);
+    chmodSync(npmRuntime, 0o755);
+    nodeArchive = path.join(root, `${releaseName}.tar.gz`);
+    const archiveResult = spawnSync("tar", ["-czf", nodeArchive, "-C", releaseParent, releaseName], {
+      encoding: "utf8",
+    });
+    if (archiveResult.status !== 0) {
+      throw new Error(`could not create Node fixture archive: ${archiveResult.stderr}`);
+    }
+    const digest = createHash("sha256").update(readFileSync(nodeArchive)).digest("hex");
+    nodeChecksums = path.join(root, "SHASUMS256.txt");
+    writeFileSync(nodeChecksums, `${digest}  ${releaseName}.tar.gz\n`);
+  }
   const codexHome = path.join(home, ".codex");
   const configPath = path.join(codexHome, "config.toml");
   const backupPath = `${configPath}.eggai.bak`;
@@ -127,10 +154,47 @@ done
 [ "\${url%/models}" = "$url" ] || { printf '%s' "\${FAKE_MODELS_STATUS:-200}"; exit 0; }
 [ "\${url%/responses}" = "$url" ] || { printf '%s' "\${FAKE_RESPONSES_STATUS:-200}"; exit 0; }
 [ -n "$output" ] || exit 2
-cat "$FAKE_INSTALLER_SOURCE" > "$output"
+case "$url" in
+  */SHASUMS256.txt) cat "$FAKE_NODE_CHECKSUMS" > "$output" ;;
+  *.tar.gz) cat "$FAKE_NODE_ARCHIVE" > "$output" ;;
+  *) exit 2 ;;
+esac
 `,
   );
   chmodSync(fakeCurl, 0o755);
+
+  if (options.automaticNode) {
+    const fakeUname = path.join(bin, "uname");
+    writeFileSync(
+      fakeUname,
+      "#!/bin/sh\ncase \"$1\" in -s) echo Linux ;; -m) echo x86_64 ;; *) exit 1 ;; esac\n",
+    );
+    chmodSync(fakeUname, 0o755);
+  }
+
+  const fakeNode = path.join(bin, "node");
+  writeFileSync(
+    fakeNode,
+    `#!/bin/sh
+case "\${1:-}" in
+  -p) printf '%s\n' "\${FAKE_NODE_MAJOR:-22}" ;;
+  --version) printf 'v%s.0.0\n' "\${FAKE_NODE_MAJOR:-22}" ;;
+  *) exit 64 ;;
+esac
+`,
+  );
+  chmodSync(fakeNode, 0o755);
+
+  const fakeNpm = path.join(bin, "npm");
+  writeFileSync(
+    fakeNpm,
+    `#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_NPM_LOG"
+[ -z "\${FAKE_NPM_EXIT:-}" ] || exit "$FAKE_NPM_EXIT"
+sh "$FAKE_INSTALLER_SOURCE"
+`,
+  );
+  chmodSync(fakeNpm, 0o755);
 
   const signalMarker = path.join(root, "config-signal-sent");
   if (options.signalAfterConfigWrite) {
@@ -169,6 +233,10 @@ exit "$status"
           EGGAI_API_KEY: undefined,
           FAKE_CODEX_LOG: shellPath(codexLog),
           FAKE_INSTALLER_SOURCE: shellPath(fixture),
+          FAKE_NPM_LOG: shellPath(npmLog),
+          FAKE_NODE_ARCHIVE: nodeArchive ? shellPath(nodeArchive) : undefined,
+          FAKE_NODE_CHECKSUMS: nodeChecksums ? shellPath(nodeChecksums) : undefined,
+          FAKE_NODE_MAJOR: options.automaticNode ? "15" : "22",
           FAKE_SIGNAL_CONFIG_PATH: options.signalAfterConfigWrite
             ? shellPath(configPath)
             : undefined,
@@ -197,6 +265,7 @@ exit "$status"
   const backup = existsSync(backupPath) ? readFileSync(backupPath, "utf8") : undefined;
   const installedCodex = existsSync(path.join(home, ".local", "bin", "codex"));
   const codexCommands = existsSync(codexLog) ? readFileSync(codexLog, "utf8") : "";
+  const npmCommands = existsSync(npmLog) ? readFileSync(npmLog, "utf8") : "";
   const environment = existsSync(environmentPath)
     ? readFileSync(environmentPath, "utf8")
     : undefined;
@@ -213,6 +282,7 @@ exit "$status"
     configs,
     environment,
     installedCodex,
+    npmCommands,
     profile,
     remainingTemporaryFiles,
     result,
@@ -230,13 +300,14 @@ test("the hosted Shell installer has valid POSIX shell syntax", () => {
   expect(result.status).toBe(0);
 });
 
-test("default installation propagates an official installer download failure", () => {
+test("default installation propagates an npm package installation failure", () => {
   const failed = runWithInstallerFixture("#!/bin/sh\nexit 0\n", {
-    extraEnv: { FAKE_CURL_EXIT: "37" },
+    extraEnv: { FAKE_NPM_EXIT: "37" },
   });
 
   expect(failed.result.status).not.toBe(0);
-  expect(failed.result.stderr).toContain("could not download the official Codex installer");
+  expect(failed.result.stderr).toContain("npm could not install @openai/codex");
+  expect(failed.result.stderr).toContain("exit code 37");
   expect(failed.result.stdout).not.toContain("Done: Codex is installed");
   expect(failed.remainingTemporaryFiles).toEqual([]);
 });
@@ -251,36 +322,38 @@ test("default installation verifies the installed Codex command before reporting
   expect(installed.remainingTemporaryFiles).toEqual([]);
 });
 
-test("the official Codex installer subprocess receives the mainland npm registry default", () => {
-  const installed = runWithInstallerFixture(
-    successfulInstaller.replace(
-      "set -eu",
-      'set -eu\n[ "$NPM_CONFIG_REGISTRY" = "https://registry.npmmirror.com" ] || exit 78',
-    ),
-  );
+test("default installation verifies official Node.js before npm when Node is too old", () => {
+  const installed = runWithInstallerFixture(successfulInstaller, { automaticNode: true });
+
+  expect(installed.result.status, installed.result.stderr).toBe(0);
+  expect(installed.result.stdout).toContain("Installing Node.js 22.x from nodejs.org");
+  expect(installed.result.stdout).toContain("Done: Codex is installed");
+  expect(installed.npmCommands).toContain("install --global @openai/codex@latest");
+  expect(installed.profile).toContain(".local/share/eggdoc-node/current/bin");
+});
+
+test("Codex is installed from the official npm package through the mainland registry", () => {
+  const installed = runWithInstallerFixture(successfulInstaller);
 
   expect(installed.result.status, installed.result.stderr).toBe(0);
   expect(installed.result.stdout).toContain("Done: Codex is installed");
+  expect(installed.npmCommands).toContain("install --global @openai/codex@latest");
+  expect(installed.npmCommands).toContain("--prefix");
+  expect(installed.npmCommands).toContain("--registry https://registry.npmmirror.com");
+  expect(installed.npmCommands).toContain("--include=optional --no-audit --no-fund");
 });
 
-test("default installation rejects invalid responses and preserves installer failure", () => {
-  const html = runWithInstallerFixture("<!doctype html><title>Unavailable</title>\n");
-  const whitespace = runWithInstallerFixture(" \n\t\n");
+test("default installation preserves an npm subprocess failure", () => {
   const failed = runWithInstallerFixture("#!/bin/sh\nexit 42\n");
 
-  expect(html.result.status).not.toBe(0);
-  expect(html.result.stderr).toContain("returned HTML instead of a script");
-  expect(html.remainingTemporaryFiles).toEqual([]);
-  expect(whitespace.result.status).not.toBe(0);
-  expect(whitespace.result.stderr).toContain("response was empty");
-  expect(whitespace.remainingTemporaryFiles).toEqual([]);
   expect(failed.result.status).not.toBe(0);
-  expect(failed.result.stderr).toContain("official Codex installer did not complete successfully");
+  expect(failed.result.stderr).toContain("npm could not install @openai/codex");
+  expect(failed.result.stderr).toContain("exit code 42");
   expect(failed.result.stdout).not.toContain("Done: Codex is installed");
   expect(failed.remainingTemporaryFiles).toEqual([]);
 });
 
-test("EggAi installation verifies the endpoint before downloading the official installer", () => {
+test("EggAi installation verifies the endpoint before invoking npm", () => {
   const failed = runWithInstallerFixture(successfulInstaller, {
     args: [
       "--eggai",
@@ -299,7 +372,7 @@ test("EggAi installation verifies the endpoint before downloading the official i
   expect(failed.installedCodex).toBe(false);
 });
 
-test("EggAi installation verifies the selected model before downloading the official installer", () => {
+test("EggAi installation verifies the selected model before invoking npm", () => {
   const failed = runWithInstallerFixture(successfulInstaller, {
     args: ["--eggai", "--sk-key", "sk-EGGDOC-SHELL-MODEL-FAILURE", "--model", "gpt-5.6-sol"],
     extraEnv: { FAKE_RESPONSES_STATUS: "404" },
@@ -339,6 +412,7 @@ test("EggAi installation configures provider-scoped authentication without chang
   expect(configured.config).toContain("Respond in English by default");
   expect(configured.config).not.toContain(fixtureKey);
   expect(configured.environment).toContain("EGGAI_API_KEY='sk-EGGDOC-SHELL-INSTALL-FIXTURE'");
+  expect(configured.environment).toContain(".local/share/eggdoc-node/current/bin");
   expect(configured.profile).toContain("# >>> eggai-codex-env");
   expect(configured.profile).toContain(". '");
   expect(configured.codexCommands).not.toContain("login");
@@ -474,7 +548,10 @@ test("default dry-run installs Codex without changing provider configuration", (
 
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Mode: default");
-  expect(result.stdout).toContain("npm registry for installer subprocesses: https://registry.npmmirror.com");
+  expect(result.stdout).toContain("Node.js requirement: >=16");
+  expect(result.stdout).toContain("Node.js automatic install source: https://nodejs.org/dist/latest-v22.x");
+  expect(result.stdout).toContain("npm package: @openai/codex@latest");
+  expect(result.stdout).toContain("npm registry: https://registry.npmmirror.com");
   expect(result.stdout).toContain("Would install/update Codex: yes");
   expect(result.stdout).toContain("Would write config.toml: no");
   expect(result.stdout).toContain("Would change existing Codex login: no");

@@ -42,7 +42,10 @@ export function buildPowerShellInstallerCommand({
     `$eggdocChildCommand='& ' + $eggdocQuotedInstaller + ${quotePowerShellArgument(argumentsText ? ` ${argumentsText}` : "")}; ` +
     `$eggdocEncodedCommand=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($eggdocChildCommand)); ` +
     `$eggdocProcess=Start-Process -FilePath $eggdocPowerShell -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',$eggdocEncodedCommand) -Wait -PassThru -NoNewWindow; ` +
-    `$eggdocExitCode=$eggdocProcess.ExitCode; if ($eggdocExitCode -ne 0) { throw "EggDoc installer exited with code $eggdocExitCode." } ` +
+    `$eggdocExitCode=$eggdocProcess.ExitCode; if ($eggdocExitCode -ne 0) { throw "EggDoc installer exited with code $eggdocExitCode." }; ` +
+    `$eggdocUserPath=[Environment]::GetEnvironmentVariable('Path','User'); ` +
+    `$eggdocMachinePath=[Environment]::GetEnvironmentVariable('Path','Machine'); ` +
+    `$env:PATH=(@($env:PATH,$eggdocUserPath,$eggdocMachinePath) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ';' ` +
     `} finally { Remove-Item -LiteralPath $eggdocInstaller -Force -ErrorAction SilentlyContinue } }`
   );
 }

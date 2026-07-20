@@ -147,7 +147,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
 前缀为 `PUBLIC_` 的值会进入客户端构建，不能包含秘密。服务端变量缺失或格式无效时，公开教程仍可访问，但认证和个性化配置接口会降级为不可用状态。
 
-中国大陆部署时，页面默认通过可访问的 `https://doc.eggai.icu` 提供安装脚本。macOS/Linux/WSL 安装 Codex CLI，Windows 通过 Microsoft Store 产品 `9PLM9XGG6VKS` 安装 OpenAI Codex 桌面应用，Claude 始终安装 Claude Code CLI。官方渠道不可达时会明确报错并停止；安装子进程若调用 npm，则默认使用 `https://registry.npmmirror.com`，且不永久修改 npm 配置。EggAi 模式独立验证 EggAi 端点和所选模型，不依赖官方账户登录网络。
+中国大陆部署时，页面默认通过可访问的 `https://doc.eggai.icu` 提供安装脚本。macOS/Linux/WSL 安装 Codex CLI，Windows 通过 Microsoft Store 产品 `9PLM9XGG6VKS` 安装 OpenAI Codex 桌面应用，Claude 始终安装 Claude Code CLI。CLI 脚本会检测 Node.js，缺失或版本过低时从 Node.js 官方渠道自动安装，再通过 `https://registry.npmmirror.com` 安装官方 npm 包；镜像只作用于当前安装命令，不永久修改 npm 配置。官方 Node.js、npm 镜像或 Microsoft Store 不可达时会明确报错并停止。EggAi 模式独立验证 EggAi 端点和所选模型，不依赖官方账户登录网络。
 
 ## 常用命令
 

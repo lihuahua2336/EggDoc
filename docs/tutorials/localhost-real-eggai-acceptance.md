@@ -38,7 +38,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 
 Do not put real values in `wrangler.toml`; its `env.test` section is reserved for automated fixtures.
 
-The EggDoc scripts use official product channels: native installer URLs for Codex CLI and Claude Code CLI, and exact Microsoft Store product `9PLM9XGG6VKS` for the Windows Codex desktop app. They do not use a site-provided binary package. If an official channel cannot be reached, the command fails clearly instead of silently switching sources. Installer subprocesses get a process-scoped `https://registry.npmmirror.com` npm registry default.
+The EggDoc scripts use official product identities: `@openai/codex` and `@anthropic-ai/claude-code` for CLI installations, and exact Microsoft Store product `9PLM9XGG6VKS` for the Windows Codex desktop app. CLI scripts detect Node.js and install Node 22 from the official Node.js channel when the runtime is missing or too old. They do not use a site-provided binary package. If an official Node.js or Store channel, or the npm registry, cannot be reached, the command fails clearly instead of silently switching sources. npm receives a command-scoped `https://registry.npmmirror.com` registry default.
 
 The committed `.env.test` contains recognizable fake values and overrides `.env.local` during `astro build --mode test`. Do not replace those fixtures with real service settings.
 

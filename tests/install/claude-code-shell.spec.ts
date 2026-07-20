@@ -54,6 +54,7 @@ function runWithInstallerFixture(
   const home = path.join(root, "home");
   const temporaryFiles = path.join(root, "tmp");
   const fixture = path.join(root, "installer.sh");
+  const npmLog = path.join(root, "npm.log");
   mkdirSync(bin);
   mkdirSync(home);
   mkdirSync(temporaryFiles);
@@ -107,6 +108,30 @@ cat "$FAKE_INSTALLER_SOURCE" > "$output"
   );
   chmodSync(fakeCurl, 0o755);
 
+  const fakeNode = path.join(bin, "node");
+  writeFileSync(
+    fakeNode,
+    `#!/bin/sh
+case "\${1:-}" in
+  -p) printf '%s\n' "\${FAKE_NODE_MAJOR:-22}" ;;
+  --version) printf 'v%s.0.0\n' "\${FAKE_NODE_MAJOR:-22}" ;;
+  *) exec "$REAL_NODE_COMMAND" "$@" ;;
+esac
+`,
+  );
+  chmodSync(fakeNode, 0o755);
+
+  const fakeNpm = path.join(bin, "npm");
+  writeFileSync(
+    fakeNpm,
+    `#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_NPM_LOG"
+[ -z "\${FAKE_NPM_EXIT:-}" ] || exit "$FAKE_NPM_EXIT"
+sh "$FAKE_INSTALLER_SOURCE"
+`,
+  );
+  chmodSync(fakeNpm, 0o755);
+
   if (preinstallClaude) {
     const claudeBin = path.join(home, ".local", "bin");
     mkdirSync(claudeBin, { recursive: true });
@@ -122,9 +147,11 @@ cat "$FAKE_INSTALLER_SOURCE" > "$output"
     results.push(
       runShell(args, {
         FAKE_INSTALLER_SOURCE: shellPath(fixture),
+        FAKE_NPM_LOG: shellPath(npmLog),
         HOME: shellPath(home),
         PATH: `${bin}${path.delimiter}${testPath ?? ""}`,
         TMPDIR: shellPath(temporaryFiles),
+        REAL_NODE_COMMAND: shellPath(process.execPath),
         ...extraEnv,
       }),
     );
@@ -143,10 +170,12 @@ cat "$FAKE_INSTALLER_SOURCE" > "$output"
   const settings = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : undefined;
   const backup = existsSync(backupPath) ? readFileSync(backupPath, "utf8") : undefined;
   const remainingTemporaryFiles = readdirSync(temporaryFiles);
+  const npmCommands = existsSync(npmLog) ? readFileSync(npmLog, "utf8") : "";
   rmSync(root, { force: true, recursive: true });
   return {
     backup,
     backups,
+    npmCommands,
     remainingTemporaryFiles,
     result: results.at(-1)!,
     results,
@@ -171,8 +200,10 @@ test("Claude Code Shell dry-run delegates installation without changing configur
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
   expect(result.stdout).toContain("Claude Code installer dry run");
-  expect(result.stdout).toContain("Official installer URL: https://claude.ai/install.sh");
-  expect(result.stdout).toContain("npm registry for installer subprocesses: https://registry.npmmirror.com");
+  expect(result.stdout).toContain("Node.js requirement: >=22");
+  expect(result.stdout).toContain("Node.js automatic install source: https://nodejs.org/dist/latest-v22.x");
+  expect(result.stdout).toContain("npm package: @anthropic-ai/claude-code@latest");
+  expect(result.stdout).toContain("npm registry: https://registry.npmmirror.com");
   expect(result.stdout).toContain("Would install/update Claude Code: yes");
   expect(result.stdout).toContain("Would modify Claude Code configuration: no");
 });
@@ -271,24 +302,17 @@ test("Claude Code Shell installer accepts official release channels and rejects 
   expect(malformed.status).not.toBe(0);
 });
 
-test("Claude Code Shell installer rejects invalid responses, propagates failure, and cleans up", () => {
-  const html = runWithInstallerFixture("<!doctype html><title>Unavailable</title>\n");
-  const whitespace = runWithInstallerFixture(" \n\t\n");
+test("Claude Code Shell installer propagates npm failure and cleans up", () => {
   const failed = runWithInstallerFixture("#!/usr/bin/env bash\nexit 42\n", true);
 
-  expect(html.result.status).not.toBe(0);
-  expect(html.result.stderr).toContain("returned HTML instead of a script");
-  expect(html.remainingTemporaryFiles).toEqual([]);
-  expect(whitespace.result.status).not.toBe(0);
-  expect(whitespace.result.stderr).toContain("response was empty");
-  expect(whitespace.remainingTemporaryFiles).toEqual([]);
   expect(failed.result.status).not.toBe(0);
-  expect(failed.result.stderr).toContain("Anthropic installer did not complete successfully");
+  expect(failed.result.stderr).toContain("npm could not install @anthropic-ai/claude-code");
+  expect(failed.result.stderr).toContain("exit code 42");
   expect(failed.result.stdout).not.toContain("Done: Claude Code is installed");
   expect(failed.remainingTemporaryFiles).toEqual([]);
 });
 
-test("Claude Code Shell installer verifies a successful delegated installation", () => {
+test("Claude Code Shell installer verifies a successful npm installation", () => {
   const installed = runWithInstallerFixture(`#!/usr/bin/env bash
 set -eu
 mkdir -p "$HOME/.local/bin"
@@ -306,7 +330,7 @@ chmod +x "$HOME/.local/bin/claude"
   expect(installed.remainingTemporaryFiles).toEqual([]);
 });
 
-test("the Anthropic installer subprocess receives the mainland npm registry default", () => {
+test("Claude Code uses the official npm package through the mainland registry", () => {
   const installed = runWithInstallerFixture(`#!/usr/bin/env bash
 set -eu
 [ "$NPM_CONFIG_REGISTRY" = "https://registry.npmmirror.com" ] || exit 78
@@ -320,6 +344,10 @@ chmod +x "$HOME/.local/bin/claude"
 
   expect(installed.result.status, installed.result.stderr).toBe(0);
   expect(installed.result.stdout).toContain("Claude Code registry fixture");
+  expect(installed.npmCommands).toContain("install --global @anthropic-ai/claude-code@latest");
+  expect(installed.npmCommands).toContain("--prefix");
+  expect(installed.npmCommands).toContain("--registry https://registry.npmmirror.com");
+  expect(installed.npmCommands).toContain("--include=optional --no-audit --no-fund");
 });
 
 test("Claude Code Shell EggAi mode preserves existing settings and creates a backup", () => {
