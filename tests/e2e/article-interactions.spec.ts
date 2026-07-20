@@ -20,7 +20,7 @@ for (const width of articleWidths) {
 
     await expect(panel.getByRole("button", { name: "安装命令已复制" })).toBeVisible();
     await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
-      "eggdoc.pages.dev/install/claude-code.",
+      "doc.eggai.icu/install/claude-code.",
     );
   });
 
@@ -54,11 +54,13 @@ for (const width of articleWidths) {
       "/eggai/claude-code-eggai-configuration/",
     ]) {
       await page.goto(route);
-      expect(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-        ),
-      ).toBe(true);
+      const layout = await page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }));
+      expect(layout.scrollWidth, `${route} document width: ${JSON.stringify(layout)}`).toBeLessThanOrEqual(
+        layout.clientWidth,
+      );
     }
   });
 }

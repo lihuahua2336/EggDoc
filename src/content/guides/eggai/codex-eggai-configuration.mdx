@@ -18,7 +18,7 @@ order: 20
 | 文件 | 用途 |
 | --- | --- |
 | `config.toml` | 保存 EggAi 提供方、Base URL、模型和默认回复语言 |
-| `eggai.env` | macOS/Linux 保存 `EGGAI_API_KEY` 的受限权限文件 |
+| `eggai.env` | macOS、Linux、WSL 保存 `EGGAI_API_KEY` 的受限权限文件 |
 | `config.toml.eggai.bak` | 配置发生变化时保留的原配置备份 |
 
 ## config.toml
@@ -47,7 +47,7 @@ wire_api = "responses"
 
 ## API Key
 
-macOS/Linux 会将密钥写入 `CODEX_HOME/eggai.env`，并在用户 shell profile 中维护受控加载块。Windows 默认写入当前用户环境变量。PowerShell 命令会显式设置：
+macOS/Linux/WSL 会将密钥写入 `CODEX_HOME/eggai.env`，在用户 shell profile 中维护受控加载块，并在一键命令成功后加载到当前终端。Windows 默认写入当前用户环境变量。PowerShell 命令会显式设置：
 
 ```powershell
 $env:EGGAI_CODEX_ENV_SCOPE = 'User'
@@ -63,9 +63,9 @@ $env:EGGAI_CODEX_ENV_SCOPE = 'User'
 
 ## 中国大陆网络说明
 
-EggAi 模式在修改本地文件前会用所选 API Key 请求 EggAi `Base URL` 的 `/models`。该检查通过后，Codex 运行时直接访问 EggAi，不会执行 `codex login`，也不依赖 OpenAI/ChatGPT 账户网络。
+EggAi 模式在修改本地文件前会用所选 API Key 请求 EggAi `Base URL` 的 `/models`，并使用必填的准确模型 ID 发送一个最小 Responses 请求，确认该模型在当前分组中可用。检查通过后，Codex 运行时直接访问 EggAi，不会执行 `codex login`，也不依赖 OpenAI/ChatGPT 账户网络。
 
-安装器下载是另一条网络链路。官方 Codex 安装地址无法访问时，请在执行前为当前终端设置 `CODEX_INSTALLER_URL`，指向组织内经过审核的可达镜像；Shell 也会透传 `HTTPS_PROXY`、`HTTP_PROXY` 和 `NO_PROXY`。如果是 EggDoc 页面生成的命令，请将部署环境的 `PUBLIC_INSTALLER_ORIGIN` 配置为中国用户可访问的自定义域名，并可通过 `PUBLIC_CODEX_INSTALLER_ORIGIN` 自动按平台注入正确的 `.sh` 或 `.ps1` 镜像地址。
+安装器下载是另一条网络链路。macOS、Linux 和 WSL 固定请求官方 Codex CLI 安装地址；Windows 固定使用 Microsoft Store 的 OpenAI 产品 `9PLM9XGG6VKS`。官方渠道不可访问时会明确报错并停止。Shell 仍会透传 `HTTPS_PROXY`、`HTTP_PROXY` 和 `NO_PROXY`。如果官方安装过程内部调用 npm，包装脚本会在该子进程中默认使用 `https://registry.npmmirror.com`，不会永久修改用户 npm 配置。页面脚本入口默认为 `https://doc.eggai.icu`。
 
 因此，“EggAi 配置成功”表示 EggAi 端点、模型和本地配置验证通过；它不表示官方账户登录或官方账户 API 在当前网络中可用。
 

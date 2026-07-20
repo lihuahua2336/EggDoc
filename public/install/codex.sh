@@ -10,7 +10,8 @@ MODEL="${MODEL:-${CODEX_MODEL:-}}"
 DRY_RUN="${DRY_RUN:-0}"
 GATEWAY_TIMEOUT_SECONDS="${EGGDOC_GATEWAY_TIMEOUT_SECONDS:-60}"
 EGGAI_MODE=0
-OFFICIAL_INSTALLER_URL="${CODEX_INSTALLER_URL:-https://chatgpt.com/codex/install.sh}"
+OFFICIAL_INSTALLER_URL="https://chatgpt.com/codex/install.sh"
+NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 CONFIG_FILE="$CODEX_HOME/config.toml"
 EGGAI_ENV_FILE="$CODEX_HOME/eggai.env"
@@ -18,22 +19,22 @@ EGGAI_ENV_FILE="$CODEX_HOME/eggai.env"
 usage() {
   cat <<'EOF'
 Usage:
-  curl -fsSL https://eggdoc.pages.dev/install/codex.sh | sh
-  curl -fsSL https://eggdoc.pages.dev/install/codex.sh | sh -s -- --eggai --sk-key sk-...
+  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/codex.sh && [ -s "$installer" ] && sh "$installer")
+  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/codex.sh && [ -s "$installer" ] && sh "$installer" --eggai --sk-key sk-... --model gpt-...) && . "${CODEX_HOME:-$HOME/.codex}/eggai.env"
 
 Options:
   --eggai              Configure Codex to use EggAi after installation.
   --sk-key <key>       Required with --eggai. EggAi API key.
   --baseurl <url>      Optional. Default: https://api.eggai.icu/v1
   --language <value>   Optional. zh-cn or en-us. Default: zh-cn
-  --model <id>         Optional. Set Codex's default model for EggAi.
+  --model <id>         Required with --eggai. Exact EggAi Codex model ID.
   --dry-run            Check what would happen without installing or writing files.
   --help               Show this help.
 
 Environment variables are also supported:
   SK_KEY, EGGAI_API_KEY, BASE_URL, LANGUAGE, MODEL, CODEX_HOME,
-  CODEX_INSTALL_DIR, CODEX_INSTALLER_URL, CODEX_NON_INTERACTIVE, CODEX_PROFILE,
-  EGGDOC_GATEWAY_TIMEOUT_SECONDS, DRY_RUN
+  CODEX_INSTALL_DIR, CODEX_NON_INTERACTIVE, CODEX_PROFILE,
+  EGGDOC_GATEWAY_TIMEOUT_SECONDS, NPM_CONFIG_REGISTRY, DRY_RUN
 EOF
 }
 
@@ -155,6 +156,7 @@ validate_base_url() {
 
 verify_eggai_codex_endpoint() {
   models_url="${BASE_URL%/}/models"
+  responses_url="${BASE_URL%/}/responses"
   if command -v curl >/dev/null 2>&1; then
     if ! models_status="$(curl -sS --retry 2 --connect-timeout 15 --max-time "$GATEWAY_TIMEOUT_SECONDS" \
       -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SK_KEY" -- "$models_url")"; then
@@ -172,6 +174,26 @@ verify_eggai_codex_endpoint() {
   else
     fail "curl or wget is required to verify the EggAi Codex endpoint."
   fi
+
+  if [ -n "$MODEL" ]; then
+    verification_body="{\"model\":\"$MODEL\",\"input\":\"Reply with OK.\",\"max_output_tokens\":16}"
+    if command -v curl >/dev/null 2>&1; then
+      if ! model_status="$(curl -sS --retry 2 --connect-timeout 15 --max-time "$GATEWAY_TIMEOUT_SECONDS" \
+        -o /dev/null -w '%{http_code}' -X POST \
+        -H "Authorization: Bearer $SK_KEY" -H "Content-Type: application/json" \
+        --data-binary "$verification_body" -- "$responses_url")"; then
+        fail "could not verify the selected EggAi Codex model."
+      fi
+      case "$model_status" in
+        2??) ;;
+        *) fail "EggAi model verification returned HTTP $model_status. Check the selected EggAi group and model." ;;
+      esac
+    elif ! wget -q --timeout="$GATEWAY_TIMEOUT_SECONDS" --tries=3 \
+      --header="Authorization: Bearer $SK_KEY" --header="Content-Type: application/json" \
+      --post-data="$verification_body" -O /dev/null "$responses_url"; then
+      fail "could not verify the selected EggAi Codex model."
+    fi
+  fi
 }
 
 if [ "$EGGAI_MODE" = "1" ]; then
@@ -179,14 +201,13 @@ if [ "$EGGAI_MODE" = "1" ]; then
     zh-cn|en-us) ;;
     *) fail "language must be zh-cn or en-us." ;;
   esac
-  if [ -n "$MODEL" ]; then
-    case "$MODEL" in
-      *[!A-Za-z0-9._:/-]*) fail "model contains unsupported characters." ;;
-    esac
-  fi
   validate_base_url "$BASE_URL"
   case "$SK_KEY" in
     *[[:space:]]*|*[[:cntrl:]]*) fail "sk-key must not contain whitespace or control characters." ;;
+  esac
+  [ -n "$MODEL" ] || fail "model is required with --eggai. Pass --model or set MODEL."
+  case "$MODEL" in
+    *[!A-Za-z0-9._:/-]*) fail "model contains unsupported characters." ;;
   esac
 fi
 
@@ -225,6 +246,7 @@ print_plan() {
   echo "Codex installer dry run"
   echo "Mode: $([ "$EGGAI_MODE" = "1" ] && echo eggai || echo default)"
   echo "Installer URL: $OFFICIAL_INSTALLER_URL"
+  echo "npm registry for installer subprocesses: $NPM_REGISTRY"
   echo "Codex home: $CODEX_HOME"
   echo "Would install/update Codex: yes"
 
@@ -244,11 +266,7 @@ print_plan() {
   echo "Backup file: $CONFIG_FILE.eggai.bak"
   echo "Base URL: $BASE_URL"
   echo "Language: $LANGUAGE"
-  if [ -n "$MODEL" ]; then
-    echo "Model: $MODEL"
-  else
-    echo "Model: Codex provider default"
-  fi
+  echo "Model: $MODEL"
   echo "API key: $api_key_status"
   echo "Would write config.toml: yes"
   echo "Would save EGGAI_API_KEY for provider-scoped authentication: yes"
@@ -260,9 +278,7 @@ print_plan() {
   echo "# Managed by EggDoc's EggAi Codex installer."
   echo "model_provider = \"eggai\""
   echo "developer_instructions = \"$(developer_instructions | sed 's/\\/\\\\/g; s/"/\\"/g')\""
-  if [ -n "$MODEL" ]; then
-    echo "model = \"$(toml_escape "$MODEL")\""
-  fi
+  echo "model = \"$(toml_escape "$MODEL")\""
   echo "# <<< eggai-codex"
   echo
   echo "[model_providers.eggai]"
@@ -294,8 +310,12 @@ EGGAI_ENV_TMP=""
 PROFILE_TMP=""
 EGGAI_ENV_BACKUP_TMP=""
 PROFILE_BACKUP_TMP=""
+CONFIG_EXISTED=0
+CONFIG_CHANGED=0
+BACKUP_FILE=""
 EGGAI_ENV_CHANGED=0
 PROFILE_CHANGED=0
+INSTALL_COMMITTED=0
 cleanup() {
   [ -z "$INSTALLER_TMP" ] || rm -f "$INSTALLER_TMP"
   [ -z "$CLEAN_FILE" ] || rm -f "$CLEAN_FILE"
@@ -316,13 +336,15 @@ INSTALLER_TMP="$(mktemp "${TMPDIR:-/tmp}/eggdoc-codex-installer.XXXXXX")" || \
 say install
 CODEX_NON_INTERACTIVE="${CODEX_NON_INTERACTIVE:-1}"
 export CODEX_NON_INTERACTIVE
+NPM_CONFIG_REGISTRY="$NPM_REGISTRY"
+export NPM_CONFIG_REGISTRY
 if command -v curl >/dev/null 2>&1; then
   if ! curl -fsSL --retry 2 --connect-timeout 15 --max-time 300 \
     -o "$INSTALLER_TMP" -- "$OFFICIAL_INSTALLER_URL"; then
     fail "could not download the official Codex installer. Check network and region availability."
   fi
 elif command -v wget >/dev/null 2>&1; then
-  if ! wget -q -O "$INSTALLER_TMP" "$OFFICIAL_INSTALLER_URL"; then
+  if ! wget -q --timeout=15 --tries=3 -O "$INSTALLER_TMP" "$OFFICIAL_INSTALLER_URL"; then
     fail "could not download the official Codex installer. Check network and region availability."
   fi
 else
@@ -372,12 +394,66 @@ if [ "$EGGAI_MODE" = "0" ]; then
   exit 0
 fi
 
+restore_previous_config() {
+  [ "$CONFIG_CHANGED" = "1" ] || return 0
+  if [ "$CONFIG_EXISTED" = "1" ]; then
+    BACKUP_TMP="$(mktemp "$CODEX_HOME/.config.toml.eggai.restore.XXXXXX")" || return 1
+    cp "$BACKUP_FILE" "$BACKUP_TMP" || return 1
+    chmod 600 "$BACKUP_TMP" || return 1
+    mv "$BACKUP_TMP" "$CONFIG_FILE" || return 1
+    BACKUP_TMP=""
+  else
+    rm -f "$CONFIG_FILE" || return 1
+  fi
+  CONFIG_CHANGED=0
+}
+
+rollback_eggai_api_key() {
+  rollback_status=0
+
+  if [ "$EGGAI_ENV_CHANGED" = "1" ]; then
+    if [ "$EGGAI_ENV_EXISTED" = "1" ]; then
+      if [ -z "$EGGAI_ENV_BACKUP_TMP" ] || ! cp -p "$EGGAI_ENV_BACKUP_TMP" "$EGGAI_ENV_FILE"; then
+        rollback_status=1
+      fi
+    elif ! rm -f "$EGGAI_ENV_FILE"; then
+      rollback_status=1
+    fi
+  fi
+
+  if [ "$PROFILE_CHANGED" = "1" ]; then
+    if [ "$PROFILE_EXISTED" = "1" ]; then
+      if [ -z "$PROFILE_BACKUP_TMP" ] || ! cp -p "$PROFILE_BACKUP_TMP" "$PROFILE_FILE"; then
+        rollback_status=1
+      fi
+    elif ! rm -f "$PROFILE_FILE"; then
+      rollback_status=1
+    fi
+  fi
+
+  if [ "$rollback_status" = "0" ]; then
+    EGGAI_ENV_CHANGED=0
+    PROFILE_CHANGED=0
+  fi
+  return "$rollback_status"
+}
+
+handle_config_signal() {
+  signal_exit_code="$1"
+  if [ "$INSTALL_COMMITTED" != "1" ]; then
+    rollback_eggai_api_key >/dev/null 2>&1 || :
+    restore_previous_config >/dev/null 2>&1 || :
+  fi
+  exit "$signal_exit_code"
+}
+
+trap 'handle_config_signal 129' HUP
+trap 'handle_config_signal 130' INT
+trap 'handle_config_signal 143' TERM
+
 say config
 mkdir -p "$CODEX_HOME"
 chmod 700 "$CODEX_HOME" || fail "could not secure the Codex home directory."
-CONFIG_EXISTED=0
-CONFIG_CHANGED=0
-BACKUP_FILE=""
 if [ -f "$CONFIG_FILE" ]; then
   CONFIG_EXISTED=1
   CONFIG_SOURCE="$CONFIG_FILE"
@@ -406,6 +482,7 @@ awk -v remove_model="$REMOVE_MODEL" '
     managed_open = 0
     malformed_managed = 0
   }
+  { sub(/\r$/, "") }
   /^# >>> eggai-codex$/ {
     if (managed_open) {
       malformed_managed = 1
@@ -514,53 +591,10 @@ else
     mv "$BACKUP_TMP" "$BACKUP_FILE"
     BACKUP_TMP=""
   fi
+  CONFIG_CHANGED=1
   mv "$CONFIG_TMP" "$CONFIG_FILE"
   CONFIG_TMP=""
-  CONFIG_CHANGED=1
 fi
-
-restore_previous_config() {
-  [ "$CONFIG_CHANGED" = "1" ] || return 0
-  if [ "$CONFIG_EXISTED" = "1" ]; then
-    BACKUP_TMP="$(mktemp "$CODEX_HOME/.config.toml.eggai.restore.XXXXXX")" || return 1
-    cp "$BACKUP_FILE" "$BACKUP_TMP" || return 1
-    chmod 600 "$BACKUP_TMP" || return 1
-    mv "$BACKUP_TMP" "$CONFIG_FILE" || return 1
-    BACKUP_TMP=""
-  else
-    rm -f "$CONFIG_FILE" || return 1
-  fi
-}
-
-rollback_eggai_api_key() {
-  rollback_status=0
-
-  if [ "$EGGAI_ENV_CHANGED" = "1" ]; then
-    if [ "$EGGAI_ENV_EXISTED" = "1" ]; then
-      if [ -z "$EGGAI_ENV_BACKUP_TMP" ] || ! cp -p "$EGGAI_ENV_BACKUP_TMP" "$EGGAI_ENV_FILE"; then
-        rollback_status=1
-      fi
-    elif ! rm -f "$EGGAI_ENV_FILE"; then
-      rollback_status=1
-    fi
-  fi
-
-  if [ "$PROFILE_CHANGED" = "1" ]; then
-    if [ "$PROFILE_EXISTED" = "1" ]; then
-      if [ -z "$PROFILE_BACKUP_TMP" ] || ! cp -p "$PROFILE_BACKUP_TMP" "$PROFILE_FILE"; then
-        rollback_status=1
-      fi
-    elif ! rm -f "$PROFILE_FILE"; then
-      rollback_status=1
-    fi
-  fi
-
-  if [ "$rollback_status" = "0" ]; then
-    EGGAI_ENV_CHANGED=0
-    PROFILE_CHANGED=0
-  fi
-  return "$rollback_status"
-}
 
 save_eggai_api_key() {
   EGGAI_ENV_EXISTED=0
@@ -610,6 +644,7 @@ save_eggai_api_key() {
 
   awk '
     BEGIN { in_managed = 0; managed_open = 0; malformed = 0; started = 0; pending_blank = 0 }
+    { sub(/\r$/, "") }
     /^# >>> eggai-codex-env$/ {
       if (managed_open) malformed = 1
       managed_open = 1
@@ -685,16 +720,25 @@ save_eggai_api_key() {
   EGGAI_API_KEY="$SK_KEY"
   export EGGAI_API_KEY
   [ "$EGGAI_API_KEY" = "$SK_KEY" ] || return 1
+  INSTALL_COMMITTED=1
+  EGGAI_ENV_CHANGED=0
+  PROFILE_CHANGED=0
   return 0
 }
 
-trap 'rollback_eggai_api_key >/dev/null 2>&1 || :; exit 130' HUP INT
-trap 'rollback_eggai_api_key >/dev/null 2>&1 || :; exit 143' TERM
-
 say env
 if ! save_eggai_api_key; then
-  rollback_eggai_api_key || fail "could not save EGGAI_API_KEY and the previous environment/profile could not be restored."
-  restore_previous_config || fail "could not save EGGAI_API_KEY and the previous configuration could not be restored."
+  environment_restore_failed=0
+  config_restore_failed=0
+  rollback_eggai_api_key || environment_restore_failed=1
+  restore_previous_config || config_restore_failed=1
+  if [ "$environment_restore_failed" = "1" ] && [ "$config_restore_failed" = "1" ]; then
+    fail "could not save EGGAI_API_KEY, and the previous environment/profile and configuration could not be fully restored."
+  fi
+  [ "$environment_restore_failed" = "0" ] || \
+    fail "could not save EGGAI_API_KEY and the previous environment/profile could not be restored. The previous configuration was restored."
+  [ "$config_restore_failed" = "0" ] || \
+    fail "could not save EGGAI_API_KEY and the previous configuration could not be restored. The previous environment/profile was restored."
   fail "could not save EGGAI_API_KEY. The previous configuration was restored."
 fi
 

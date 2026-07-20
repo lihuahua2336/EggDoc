@@ -15,7 +15,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$OfficialInstallerUrl = if ($env:CLAUDE_CODE_INSTALLER_URL) { $env:CLAUDE_CODE_INSTALLER_URL } else { "https://claude.ai/install.ps1" }
+$OfficialInstallerUrl = "https://claude.ai/install.ps1"
+$NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY } else { "https://registry.npmmirror.com" }
 $GatewayTimeoutSeconds = if ($env:EGGDOC_GATEWAY_TIMEOUT_SECONDS) { $env:EGGDOC_GATEWAY_TIMEOUT_SECONDS } else { "60" }
 if ([string]::IsNullOrWhiteSpace($Version)) {
   $Version = if ($env:CLAUDE_CODE_VERSION) { $env:CLAUDE_CODE_VERSION } else { "latest" }
@@ -206,6 +207,7 @@ if ($DryRun) {
   Write-Host "Claude Code installer dry run"
   Write-Host "Mode: $(if ($EggAiMode) { 'eggai' } else { 'default' })"
   Write-Host "Official installer URL: $OfficialInstallerUrl"
+  Write-Host "npm registry for installer subprocesses: $NpmRegistry"
   Write-Host "Release: $Version"
   Write-Host "Would install/update Claude Code: yes"
   if ($EggAiMode) {
@@ -223,7 +225,7 @@ if ($DryRun) {
   } else {
     Write-Host "Would modify Claude Code configuration: no"
   }
-  exit 0
+  return
 }
 
 if ($EggAiMode) {
@@ -303,12 +305,35 @@ try {
     Throw-InstallError "the Anthropic installer returned HTML instead of a script. Check network and region availability."
   }
 
-  $installer = [scriptblock]::Create($installerSource)
-  $global:LASTEXITCODE = 0
-  & $installer $Version
-  $installerExitCode = $LASTEXITCODE
-  if ($installerExitCode -ne 0) {
-    Throw-InstallError "the Anthropic installer exited with code $installerExitCode."
+  $powerShellExecutable = if ($PSVersionTable.PSEdition -eq "Core") {
+    Join-Path $PSHOME "pwsh.exe"
+  } else {
+    Join-Path $PSHOME "powershell.exe"
+  }
+  if (-not (Test-Path -LiteralPath $powerShellExecutable -PathType Leaf)) {
+    Throw-InstallError "the current PowerShell executable could not be found."
+  }
+  $previousNpmRegistry = $env:NPM_CONFIG_REGISTRY
+  try {
+    $env:NPM_CONFIG_REGISTRY = $NpmRegistry
+    $global:LASTEXITCODE = 0
+    & $powerShellExecutable `
+      -NoLogo `
+      -NoProfile `
+      -NonInteractive `
+      -ExecutionPolicy Bypass `
+      -File $temporaryInstaller `
+      $Version
+    $installerExitCode = $LASTEXITCODE
+    if ($installerExitCode -ne 0) {
+      Throw-InstallError "the Anthropic installer exited with code $installerExitCode."
+    }
+  } finally {
+    if ($null -eq $previousNpmRegistry) {
+      Remove-Item Env:NPM_CONFIG_REGISTRY -ErrorAction SilentlyContinue
+    } else {
+      $env:NPM_CONFIG_REGISTRY = $previousNpmRegistry
+    }
   }
 } finally {
   Remove-Item -LiteralPath $temporaryInstaller -Force -ErrorAction SilentlyContinue

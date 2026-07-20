@@ -208,18 +208,19 @@ The UI can start as a search button in the header that opens a search dialog or 
 
 EggDoc should host thin installer scripts for Codex + EggAi setup:
 
-- `/install/codex.sh` for Linux and macOS shell usage
-- `/install/codex.ps1` for Windows PowerShell usage
+- `/install/codex.sh` for the Codex CLI on macOS, Linux, and WSL
+- `/install/codex.ps1` for the Codex desktop app on Windows
 
 The scripts should accept:
 
 - `sk-key` / `SK_KEY` as the required EggAi API Key
 - `baseurl` / `BASE_URL`, defaulting to `https://api.eggai.icu/v1`
 - `language` / `LANGUAGE`, supporting `zh-cn` and `en-us`
+- `model` / `MODEL` as the required exact EggAi model ID
 
-The Linux script should be usable through `curl -fsSL ... | sh -s -- ...`.
+The Shell command downloads the wrapper to a temporary file and executes it only after a successful bounded download. A transport failure must remain non-zero and the temporary file must be removed.
 
-The Windows script should be usable through `irm ... | iex`. It should use an exact `winget` package ID only when one is supplied, otherwise use the official installer, and fall back to the official installer after a package-manager failure. It must verify the selected EggAi `/models` endpoint before writing configuration.
+The Windows script installs the official OpenAI Codex desktop app through exact Microsoft Store product `9PLM9XGG6VKS`, verifies package family `OpenAI.Codex_2p2nqsd0c76g0`, and stops with a clear error if the official Store channel is unavailable. It does not use a third-party Store downloader or another binary source. EggAi mode must verify the selected model through the EggAi `/responses` endpoint before writing configuration.
 
 Both scripts update `~/.codex/config.toml` with `model_provider = "eggai"`, the exact selected `model`, and `env_key = "EGGAI_API_KEY"`. They persist the key through a restricted environment file/profile on Unix or a user-scoped environment variable on Windows. They do not run a global Codex login flow or modify `auth.json`.
 

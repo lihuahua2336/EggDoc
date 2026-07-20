@@ -28,9 +28,7 @@ Copy `.env.example` to the ignored `.env.local` file and replace the deployment-
 | `EGGDOC_EGGAI_PLATFORM_URL` | Yes | Browser-facing EggAi API platform origin used for activation and management. |
 | `EGGDOC_EGGAI_ECOSYSTEM_URL` | Yes | Server-facing origin that exposes the three `/api/ecosystem/*` routes. |
 | `PUBLIC_EGGAI_BASE_URL` | Optional | Public OpenAI-compatible API base URL used when an EggAi API Credential omits `base_url`. |
-| `PUBLIC_INSTALLER_ORIGIN` | Optional | Public origin that hosts `/install/codex.sh` and `/install/codex.ps1`. |
-| `PUBLIC_CODEX_INSTALLER_ORIGIN` | Optional | China-accessible Codex upstream installer mirror directory; the page appends the platform-specific filename. |
-| `PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN` | Optional | China-accessible Claude Code upstream installer mirror directory; the page appends the platform-specific filename. |
+| `PUBLIC_INSTALLER_ORIGIN` | Optional | Public origin that hosts the EggDoc install scripts. Defaults to `https://doc.eggai.icu`. |
 
 Generate a localhost-only Session secret with Node.js:
 
@@ -39,6 +37,8 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 ```
 
 Do not put real values in `wrangler.toml`; its `env.test` section is reserved for automated fixtures.
+
+The EggDoc scripts use official product channels: native installer URLs for Codex CLI and Claude Code CLI, and exact Microsoft Store product `9PLM9XGG6VKS` for the Windows Codex desktop app. They do not use a site-provided binary package. If an official channel cannot be reached, the command fails clearly instead of silently switching sources. Installer subprocesses get a process-scoped `https://registry.npmmirror.com` npm registry default.
 
 The committed `.env.test` contains recognizable fake values and overrides `.env.local` during `astro build --mode test`. Do not replace those fixtures with real service settings.
 

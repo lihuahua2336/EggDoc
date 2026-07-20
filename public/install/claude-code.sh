@@ -2,7 +2,8 @@
 set -eu
 umask 077
 
-OFFICIAL_INSTALLER_URL="${CLAUDE_CODE_INSTALLER_URL:-https://claude.ai/install.sh}"
+OFFICIAL_INSTALLER_URL="https://claude.ai/install.sh"
+NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
 INSTALL_TARGET="${CLAUDE_CODE_VERSION:-latest}"
 DRY_RUN="${DRY_RUN:-0}"
 GATEWAY_TIMEOUT_SECONDS="${EGGDOC_GATEWAY_TIMEOUT_SECONDS:-60}"
@@ -20,9 +21,9 @@ SETTINGS_FILE="$CLAUDE_HOME/settings.json"
 usage() {
   cat <<'EOF'
 Usage:
-  curl -fsSL https://eggdoc.pages.dev/install/claude-code.sh | sh
-  curl -fsSL https://eggdoc.pages.dev/install/claude-code.sh | sh -s -- --eggai --sk-key sk-...
-  curl -fsSL https://eggdoc.pages.dev/install/claude-code.sh | sh -s -- --version stable
+  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/claude-code.sh && [ -s "$installer" ] && sh "$installer")
+  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/claude-code.sh && [ -s "$installer" ] && sh "$installer" --eggai --sk-key sk-... --model claude-...)
+  (installer="$(mktemp)" && trap 'rm -f "$installer"' 0 && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$installer" https://doc.eggai.icu/install/claude-code.sh && [ -s "$installer" ] && sh "$installer" --version stable)
 
 Options:
   --eggai            Configure Claude Code to use EggAi after installation.
@@ -38,9 +39,9 @@ Options:
   --help              Show this help.
 
 Environment variables are also supported:
-  CLAUDE_CODE_VERSION, CLAUDE_CODE_INSTALLER_URL, CLAUDE_HOME, SK_KEY, EGGAI_API_KEY,
+  CLAUDE_CODE_VERSION, CLAUDE_HOME, SK_KEY, EGGAI_API_KEY,
   BASE_URL, MODEL, ANTHROPIC_MODEL, OPUS_MODEL, SONNET_MODEL, HAIKU_MODEL, FABLE_MODEL,
-  EGGDOC_GATEWAY_TIMEOUT_SECONDS, DRY_RUN
+  EGGDOC_GATEWAY_TIMEOUT_SECONDS, NPM_CONFIG_REGISTRY, DRY_RUN
 EOF
 }
 
@@ -181,6 +182,7 @@ if [ "$DRY_RUN" = "1" ]; then
   echo "Claude Code installer dry run"
   echo "Mode: $([ "$EGGAI_MODE" = "1" ] && echo eggai || echo default)"
   echo "Official installer URL: $OFFICIAL_INSTALLER_URL"
+  echo "npm registry for installer subprocesses: $NPM_REGISTRY"
   echo "Release: $INSTALL_TARGET"
   echo "Would install/update Claude Code: yes"
   if [ "$EGGAI_MODE" = "1" ]; then
@@ -360,6 +362,8 @@ PYTHON
 fi
 
 echo "Installing or updating Claude Code from Anthropic..."
+NPM_CONFIG_REGISTRY="$NPM_REGISTRY"
+export NPM_CONFIG_REGISTRY
 if ! curl -fsSL --retry 2 --connect-timeout 15 --max-time 300 \
   "$OFFICIAL_INSTALLER_URL" -o "$TMP_FILE"; then
   fail "could not download the Anthropic installer. Check network and region availability."

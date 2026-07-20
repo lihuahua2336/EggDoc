@@ -9,7 +9,7 @@ COPY . .
 
 ARG EGGDOC_SITE_URL=https://eggdoc.pages.dev
 ARG PUBLIC_EGGAI_BASE_URL=https://api.eggai.icu/v1
-ARG PUBLIC_INSTALLER_ORIGIN=https://eggdoc.pages.dev
+ARG PUBLIC_INSTALLER_ORIGIN=https://doc.eggai.icu
 
 ENV EGGDOC_DEPLOY_TARGET=node
 ENV EGGDOC_SITE_URL=$EGGDOC_SITE_URL

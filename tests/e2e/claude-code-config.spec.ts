@@ -39,8 +39,8 @@ test("an anonymous Reader gets a no-configuration Claude Code install by default
     "true",
   );
   await panel.getByRole("button", { name: "复制安装命令" }).click();
-  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toBe(
-    "curl -fsSL 'https://eggdoc.pages.dev/install/claude-code.sh' | sh",
+  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
+    "'https://doc.eggai.icu/install/claude-code.sh'",
   );
 
   await panel.getByRole("tab", { name: "EggAi 配置" }).click();

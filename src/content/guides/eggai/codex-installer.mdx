@@ -13,19 +13,21 @@ import { EggAiCodexConfig } from "@/components/codex/EggAiCodexConfig";
 
 ## 安装
 
-选择你的安装方式和操作系统，复制命令后粘贴到终端运行。
+选择你的安装方式和操作系统，复制命令后粘贴到终端运行。macOS、Linux 和 WSL 安装 Codex CLI；Windows 通过 Microsoft Store 安装 OpenAI Codex 桌面应用。
 
 <EggAiCodexConfig client:load />
 
 ## 验证安装
 
-安装结束后运行：
+macOS、Linux 和 WSL 安装结束后运行：
 
 ```sh
 codex --version
 ```
 
-看到版本号即表示安装完成。
+看到版本号即表示 Codex CLI 安装完成。
+
+Windows 安装结束后，在开始菜单打开 Codex。脚本会核对 Microsoft Store 产品 `9PLM9XGG6VKS` 安装出的包族 `OpenAI.Codex_2p2nqsd0c76g0`，不会把同名第三方应用或 Codex CLI 当成桌面应用。使用 EggAi 配置后请重启 Codex 桌面应用，让它读取新的用户环境变量和配置。
 
 ## 了解 EggAi 配置
 

@@ -10,38 +10,20 @@ import {
 } from "../../src/lib/claude-code/configuration";
 
 test("default commands install Claude Code without changing its provider", () => {
-  expect(buildClaudeCodeShellDefaultInstallCommand("https://docs.example.test/root")).toBe(
-    "curl -fsSL 'https://docs.example.test/root/install/claude-code.sh' | sh",
+  const shell = buildClaudeCodeShellDefaultInstallCommand("https://docs.example.test/root");
+  const powerShell = buildClaudeCodePowerShellDefaultInstallCommand(
+    "https://docs.example.test/root",
   );
-  expect(buildClaudeCodePowerShellDefaultInstallCommand("https://docs.example.test/root")).toBe(
-    "irm 'https://docs.example.test/root/install/claude-code.ps1' | iex",
-  );
-});
 
-test("Claude Code commands can use a deployment-provided installer mirror", () => {
-  expect(
-    buildClaudeCodeShellDefaultInstallCommand(
-      "https://docs.example.test/root",
-      "https://mirror.example.test/claude",
-    ),
-  ).toBe(
-    "curl -fsSL 'https://docs.example.test/root/install/claude-code.sh' | " +
-      "CLAUDE_CODE_INSTALLER_URL='https://mirror.example.test/claude/claude-code.sh' sh",
+  expect(shell).toContain("'https://docs.example.test/root/install/claude-code.sh'");
+  expect(powerShell).toContain(
+    "Invoke-WebRequest -Uri 'https://docs.example.test/root/install/claude-code.ps1'",
   );
-  expect(
-    buildClaudeCodePowerShellDefaultInstallCommand(
-      "https://docs.example.test/root",
-      "https://mirror.example.test/claude",
-    ),
-  ).toBe(
-    "$env:CLAUDE_CODE_INSTALLER_URL='https://mirror.example.test/claude/claude-code.ps1'; " +
-      "irm 'https://docs.example.test/root/install/claude-code.ps1' | iex",
-  );
+  expect(powerShell).not.toContain("| iex");
 });
 
 test("EggAi commands safely quote the selected Claude Code credential and URL", () => {
-  expect(
-    buildClaudeCodeShellInstallCommand({
+  const shellCommand = buildClaudeCodeShellInstallCommand({
       apiKey: "sk-reader's-$HOME",
       baseUrl: "https://api.example.test/v1",
       installerOrigin: "https://docs.example.test/root",
@@ -52,17 +34,14 @@ test("EggAi commands safely quote the selected Claude Code credential and URL", 
         opus: "claude-opus-4-8",
         sonnet: "claude-sonnet-5",
       },
-    }),
-  ).toBe(
-    "curl -fsSL 'https://docs.example.test/root/install/claude-code.sh' | sh -s -- " +
-      "--eggai --sk-key 'sk-reader'\"'\"'s-$HOME' --baseurl 'https://api.example.test' " +
-      "--model 'claude-sonnet-5' --opus-model 'claude-opus-4-8' " +
-      "--sonnet-model 'claude-sonnet-5' --haiku-model 'claude-haiku-4-5' " +
-      "--fable-model 'claude-fable-5'",
-  );
+    });
 
-  expect(
-    buildClaudeCodePowerShellInstallCommand({
+  expect(shellCommand).toContain("--sk-key 'sk-reader'\"'\"'s-$HOME'");
+  expect(shellCommand).toContain("--baseurl 'https://api.example.test'");
+  expect(shellCommand).toContain("--model 'claude-sonnet-5'");
+  expect(shellCommand).toContain("--fable-model 'claude-fable-5'");
+
+  const powerShellCommand = buildClaudeCodePowerShellInstallCommand({
       apiKey: "sk-reader's-$HOME; `exit`",
       baseUrl: "https://api.example.test/v1",
       installerOrigin: "https://docs.example.test/root's",
@@ -73,14 +52,15 @@ test("EggAi commands safely quote the selected Claude Code credential and URL", 
         opus: "claude-opus-4-8",
         sonnet: "claude-sonnet-5",
       },
-    }),
-  ).toBe(
-    "& ([scriptblock]::Create((irm 'https://docs.example.test/root''s/install/claude-code.ps1'))) " +
-      "-EggAi -SkKey 'sk-reader''s-$HOME; `exit`' -BaseUrl 'https://api.example.test' " +
-      "-Model 'claude-sonnet-5' -OpusModel 'claude-opus-4-8' " +
-      "-SonnetModel 'claude-sonnet-5' -HaikuModel 'claude-haiku-4-5' " +
-      "-FableModel 'claude-fable-5'",
+    });
+
+  expect(powerShellCommand).toContain(
+    "Invoke-WebRequest -Uri 'https://docs.example.test/root''s/install/claude-code.ps1'",
   );
+  expect(powerShellCommand).toContain("-SkKey ''sk-reader''''s-$HOME; `exit`''");
+  expect(powerShellCommand).toContain("-BaseUrl ''https://api.example.test''");
+  expect(powerShellCommand).toContain("-FableModel ''claude-fable-5''");
+  expect(powerShellCommand).not.toContain("ScriptBlock");
 });
 
 test("Claude Code assigns the preferred EggAi model for each model role", () => {

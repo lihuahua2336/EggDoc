@@ -14,7 +14,10 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-import { buildPowerShellInstallCommand } from "../../src/lib/codex/configuration";
+import {
+  buildPowerShellDefaultInstallCommand,
+  buildPowerShellInstallCommand,
+} from "../../src/lib/codex/configuration";
 
 const powershell = path.join(
   process.env.SystemRoot ?? "C:\\Windows",
@@ -38,10 +41,10 @@ function runPowerShell(
         ...process.env,
         BASE_URL: undefined,
         CODEX_MODEL: undefined,
-        CODEX_PACKAGE_ID: undefined,
         EGGAI_API_KEY: undefined,
         LANGUAGE: undefined,
         MODEL: undefined,
+        NPM_CONFIG_REGISTRY: undefined,
         SK_KEY: undefined,
         ...(codexHome ? { CODEX_HOME: codexHome } : {}),
         ...extraEnv,
@@ -70,14 +73,13 @@ function unusedCodexHome() {
   return path.join(tmpdir(), `eggdoc-codex-powershell-${randomUUID()}`);
 }
 
-function runWithInstallerFixture(
-  installerSource = "# Installer fixture was not needed.\n",
+function runWithStoreFixture(
   wrapperArguments = "",
   options: {
-    codexAvailable?: boolean;
     extraEnv?: NodeJS.ProcessEnv;
     initialConfig?: string;
     lockConfigDuringRun?: boolean;
+    packageInstalled?: boolean;
     removeBackupAfterFirstRun?: boolean;
     runs?: number;
     wingetAvailable?: boolean;
@@ -87,9 +89,8 @@ function runWithInstallerFixture(
   const bin = path.join(root, "bin");
   const home = path.join(root, "home");
   const temporaryFiles = path.join(root, "tmp");
-  const installerFixture = path.join(root, "installer.ps1");
   const wingetLog = path.join(root, "winget.log");
-  const codexLog = path.join(root, "codex.log");
+  const packageMarker = path.join(root, "codex-package-installed");
   const environmentStateLog = path.join(root, "environment-state.log");
   const codexHome = path.join(home, ".codex");
   const configPath = path.join(codexHome, "config.toml");
@@ -97,8 +98,9 @@ function runWithInstallerFixture(
   mkdirSync(bin);
   mkdirSync(home);
   mkdirSync(temporaryFiles);
-  mkdirSync(path.join(root, "localappdata"));
-  writeFileSync(installerFixture, installerSource);
+  if (options.packageInstalled !== false) {
+    writeFileSync(packageMarker, "installed");
+  }
 
   if (options.initialConfig !== undefined) {
     mkdirSync(codexHome, { recursive: true });
@@ -110,39 +112,32 @@ function runWithInstallerFixture(
       path.join(bin, "winget.cmd"),
       `@echo off\r
 echo %*>>"%FAKE_WINGET_LOG%"\r
-if "%~1"=="list" (echo Codex & exit /b 0)\r
 if defined FAKE_WINGET_EXIT exit /b %FAKE_WINGET_EXIT%\r
-exit /b 0\r
-`,
-    );
-  }
-  if (options.codexAvailable !== false) {
-    writeFileSync(
-      path.join(bin, "codex.cmd"),
-      `@echo off\r
-setlocal EnableDelayedExpansion\r
-echo %*>>"%FAKE_CODEX_LOG%"\r
-if "%~1"=="--version" goto version\r
-exit /b 43\r
-:version\r
-if defined FAKE_CODEX_VERSION_EXIT exit /b %FAKE_CODEX_VERSION_EXIT%\r
-echo codex-cli 9.9.9 ^(EggDoc test fixture^)\r
+if not defined FAKE_SKIP_PACKAGE_MARKER echo installed>"%FAKE_CODEX_PACKAGE_MARKER%"\r
 exit /b 0\r
 `,
     );
   }
 
   const command = [
+    "function global:Get-AppxPackage {",
+    "  [CmdletBinding()] param([string]$Name)",
+    "  if (Test-Path -LiteralPath $env:FAKE_CODEX_PACKAGE_MARKER) {",
+    "    return [pscustomobject]@{ Name = 'OpenAI.Codex'; PackageFamilyName = 'OpenAI.Codex_2p2nqsd0c76g0'; Version = [version]'26.715.4045.0' }",
+    "  }",
+    "}",
     "function global:Invoke-WebRequest {",
-    "  param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing, [string]$Method, $Headers, [int]$TimeoutSec)",
+    "  param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing, [string]$Method, $Headers, [string]$Body, [string]$ContentType, [int]$TimeoutSec)",
     "  if ($Uri -like '*/models') {",
     "    $status = if ($env:FAKE_MODELS_STATUS) { [int]$env:FAKE_MODELS_STATUS } else { 200 }",
-    "    return [pscustomobject]@{ StatusCode = $status }",
+    "    return [pscustomobject]@{ StatusCode = $status; Content = '{\"data\":[{\"id\":\"gpt-5.6-sol\"}]}' }",
     "  }",
-    "  Copy-Item -LiteralPath $env:EGGDOC_CODEX_INSTALLER_FIXTURE -Destination $OutFile -Force",
+    "  if ($Uri -like '*/responses') {",
+    "    $status = if ($env:FAKE_RESPONSES_STATUS) { [int]$env:FAKE_RESPONSES_STATUS } else { 200 }",
+    "    return [pscustomobject]@{ StatusCode = $status; Content = '{\"id\":\"resp_fixture\"}' }",
+    "  }",
+    "  throw \"Unexpected request: $Uri\"",
     "}",
-    "function global:Add-AppxPackage { throw 'App Installer changes are disabled in this fixture.' }",
-    "function global:Start-Process { throw 'Store launch is disabled in this fixture.' }",
     "$configLock = $null",
     "if ($env:EGGDOC_LOCK_CONFIG) {",
     "  $configLock = [IO.File]::Open($env:EGGDOC_CONFIG_PATH, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)",
@@ -165,17 +160,14 @@ exit /b 0\r
         ["-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")],
         codexHome,
         {
-          EGGDOC_CODEX_INSTALLER_FIXTURE: installerFixture,
           EGGDOC_CODEX_WRAPPER: scriptPath,
           EGGDOC_ENV_STATE_LOG: environmentStateLog,
           EGGAI_CODEX_ENV_SCOPE: "Process",
           EGGDOC_CONFIG_PATH: configPath,
           EGGDOC_LOCK_CONFIG: options.lockConfigDuringRun ? "1" : undefined,
-          EGGDOC_NODE_BINARY: process.execPath,
-          FAKE_CODEX_LOG: codexLog,
+          FAKE_CODEX_PACKAGE_MARKER: packageMarker,
           FAKE_WINGET_LOG: wingetLog,
           HOME: home,
-          LOCALAPPDATA: path.join(root, "localappdata"),
           PATH:
             options.wingetAvailable === false
               ? `${bin}${path.delimiter}${path.join(process.env.SystemRoot ?? "C:\\Windows", "System32")}`
@@ -196,7 +188,6 @@ exit /b 0\r
   const result = results.at(-1)!;
   const backup = existsSync(backupPath) ? readFileSync(backupPath, "utf8") : undefined;
   const config = existsSync(configPath) ? readFileSync(configPath, "utf8") : undefined;
-  const codexCommands = existsSync(codexLog) ? readFileSync(codexLog, "utf8") : "";
   const environmentState = existsSync(environmentStateLog)
     ? readFileSync(environmentStateLog, "utf8")
     : undefined;
@@ -206,7 +197,6 @@ exit /b 0\r
   return {
     backup,
     backups,
-    codexCommands,
     config,
     configs,
     environmentState,
@@ -240,94 +230,168 @@ test("the hosted PowerShell installer and generated command have valid PowerShel
   expect(commandSyntax.status).toBe(0);
 });
 
-test("default installation preserves winget sources and verifies Codex before success", () => {
-  const installed = runWithInstallerFixture();
+test("generated PowerShell bootstrap retries in isolation and returns control to the caller", () => {
+  const command = buildPowerShellDefaultInstallCommand("https://docs.example.test/root");
+  const harness = [
+    "$script:attempts = 0",
+    "function global:Invoke-WebRequest {",
+    "  param([string]$Uri, [string]$OutFile, [int]$TimeoutSec, [switch]$UseBasicParsing)",
+    "  $script:attempts += 1",
+    "  if ($script:attempts -lt 3) { throw 'fixture transport failure' }",
+    "  [IO.File]::WriteAllText($OutFile, 'exit 0')",
+    "}",
+    command,
+    "Write-Output \"ATTEMPTS:$script:attempts\"",
+    "Write-Output 'CALLER_CONTINUED'",
+  ].join("\n");
+  const result = runPowerShell([
+    "-EncodedCommand",
+    Buffer.from(harness, "utf16le").toString("base64"),
+  ]);
+
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("ATTEMPTS:3");
+  expect(result.stdout).toContain("CALLER_CONTINUED");
+});
+
+test("generated PowerShell bootstrap rejects an empty successful response", () => {
+  const command = buildPowerShellDefaultInstallCommand("https://docs.example.test/root");
+  const harness = [
+    "function global:Invoke-WebRequest {",
+    "  param([string]$Uri, [string]$OutFile, [int]$TimeoutSec, [switch]$UseBasicParsing)",
+    "  [IO.File]::WriteAllText($OutFile, '')",
+    "}",
+    command,
+  ].join("\n");
+  const result = runPowerShell([
+    "-EncodedCommand",
+    Buffer.from(harness, "utf16le").toString("base64"),
+  ]);
+
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toContain("EggDoc installer response was empty");
+});
+
+test("Codex PowerShell dry-run returns control to the caller", () => {
+  const codexHome = unusedCodexHome();
+  const quotedScriptPath = scriptPath.replaceAll("'", "''");
+  const result = runPowerShell(
+    [
+      "-Command",
+      `& ([scriptblock]::Create([IO.File]::ReadAllText('${quotedScriptPath}'))) -DryRun; Write-Output 'CALLER_CONTINUED'`,
+    ],
+    codexHome,
+  );
+
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("CALLER_CONTINUED");
+});
+
+test("default installation updates an existing official Codex desktop app", () => {
+  const installed = runWithStoreFixture();
 
   expect(installed.result.status, installed.result.stderr).toBe(0);
-  expect(installed.wingetCommands).toBe("");
-  expect(installed.codexCommands).toContain("--version");
-  expect(installed.result.stdout).toContain("codex-cli 9.9.9 (EggDoc test fixture)");
-  expect(installed.result.stdout).toContain("Done: Codex is installed");
+  expect(installed.wingetCommands).toContain(
+    "upgrade --id 9PLM9XGG6VKS --exact --source msstore",
+  );
+  expect(installed.result.stdout).toContain("Codex desktop app 26.715.4045.0");
+  expect(installed.result.stdout).toContain("Done: Codex desktop app is installed");
   expect(installed.config).toBeUndefined();
 });
 
-test("default installation falls back after winget failure and preserves installer failure", () => {
-  const failed = runWithInstallerFixture(
-    '& "$env:ComSpec" /c "exit 42"\n',
-    "-CodexPackage 'OpenAI.Codex'",
-    { extraEnv: { FAKE_WINGET_EXIT: "23" } },
-  );
+test("default installation reports Microsoft Store update failures", () => {
+  const failed = runWithStoreFixture("", {
+    extraEnv: { FAKE_WINGET_EXIT: "24" },
+  });
 
   expect(failed.result.status).not.toBe(0);
-  expect(failed.wingetCommands).toContain("list --id OpenAI.Codex --exact");
-  expect(failed.wingetCommands).toContain("install --id OpenAI.Codex --exact");
-  expect(failed.result.stderr).toContain("official Codex installer exited with code 42");
-  expect(failed.result.stdout).not.toContain("Done: Codex is installed");
-  expect(failed.remainingTemporaryFiles).toEqual([]);
+  expect(failed.wingetCommands).toContain(
+    "upgrade --id 9PLM9XGG6VKS --exact --source msstore",
+  );
+  expect(failed.result.stderr).toContain("Microsoft Store could not upgrade");
+  expect(failed.result.stdout).not.toContain("Done: Codex desktop app is installed");
 });
 
-test("default installation uses the official installer directly when winget is unavailable", () => {
-  const installed = runWithInstallerFixture(
-    `
-$codexBin = Join-Path $env:LOCALAPPDATA "Programs\\OpenAI\\Codex\\bin"
-New-Item -ItemType Directory -Force -Path $codexBin | Out-Null
-Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $codexBin "codex.exe") -Force
-`,
-    "",
-    {
-      codexAvailable: false,
-      wingetAvailable: false,
-    },
+test("default installation accepts winget's no-applicable-upgrade result", () => {
+  const current = runWithStoreFixture("", {
+    extraEnv: { FAKE_WINGET_EXIT: "-1978335189" },
+  });
+
+  expect(current.result.status, current.result.stderr).toBe(0);
+  expect(current.wingetCommands).toContain(
+    "upgrade --id 9PLM9XGG6VKS --exact --source msstore",
   );
+  expect(current.result.stdout).toContain("Codex desktop app is already up to date");
+  expect(current.result.stdout).toContain("Done: Codex desktop app is installed");
+});
+
+test("default installation uses the exact official Microsoft Store product", () => {
+  const installed = runWithStoreFixture("", { packageInstalled: false });
 
   expect(installed.result.status, installed.result.stderr).toBe(0);
-  expect(installed.wingetCommands).toBe("");
-  expect(installed.result.stdout).toContain("official Codex CLI installer");
-  expect(installed.result.stdout).toContain(process.version);
-  expect(installed.result.stdout).toContain("Done: Codex is installed");
+  expect(installed.wingetCommands).toContain("install --id 9PLM9XGG6VKS --exact --source msstore");
+  expect(installed.result.stdout).toContain("Codex desktop app 26.715.4045.0");
   expect(installed.remainingTemporaryFiles).toEqual([]);
 });
 
-test("official installer rejects empty and HTML responses", () => {
-  const empty = runWithInstallerFixture("\n\t\n", "", { wingetAvailable: false, codexAvailable: false });
-  const html = runWithInstallerFixture("<!doctype html><title>Unavailable</title>\n", "", {
-    wingetAvailable: false,
-    codexAvailable: false,
+test("default installation reports Microsoft Store failures without another source", () => {
+  const failed = runWithStoreFixture("", {
+    extraEnv: { FAKE_WINGET_EXIT: "23" },
+    packageInstalled: false,
   });
 
-  expect(empty.result.status).not.toBe(0);
-  expect(empty.result.stderr).toContain("official Codex installer response was empty");
-  expect(html.result.status).not.toBe(0);
-  expect(html.result.stderr).toContain("returned HTML instead of a script");
-  expect(empty.remainingTemporaryFiles).toEqual([]);
-  expect(html.remainingTemporaryFiles).toEqual([]);
+  expect(failed.result.status).not.toBe(0);
+  expect(failed.wingetCommands).toContain("install --id 9PLM9XGG6VKS --exact --source msstore");
+  expect(failed.result.stderr).toContain("Microsoft Store could not install");
+  expect(failed.result.stdout).not.toContain("Done: Codex desktop app is installed");
 });
 
-test("EggAi installation verifies the endpoint before downloading the official installer", () => {
-  const failed = runWithInstallerFixture(undefined, "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-ENDPOINT-FAILURE'", {
-    extraEnv: { FAKE_MODELS_STATUS: "503" },
+test("default installation requires winget when the desktop app is missing", () => {
+  const failed = runWithStoreFixture("", {
+    packageInstalled: false,
+    wingetAvailable: false,
   });
+
+  expect(failed.result.status).not.toBe(0);
+  expect(failed.result.stderr).toContain("winget is required");
+  expect(failed.result.stderr).toContain("9PLM9XGG6VKS");
+});
+
+test("EggAi installation verifies the endpoint before checking the desktop app", () => {
+  const failed = runWithStoreFixture(
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-ENDPOINT-FAILURE' -Model 'gpt-5.6-sol'",
+    { extraEnv: { FAKE_MODELS_STATUS: "503" } },
+  );
 
   expect(failed.result.status).not.toBe(0);
   expect(failed.result.stderr).toContain("EggAi Codex endpoint verification returned HTTP 503");
   expect(failed.result.stdout).toContain("Verifying the EggAi Codex endpoint");
-  expect(failed.result.stdout).not.toContain("Installing or updating Codex");
-  expect(failed.codexCommands).toBe("");
+  expect(failed.result.stdout).not.toContain("Installing the Codex desktop app");
+});
+
+test("EggAi installation verifies the selected model before checking the desktop app", () => {
+  const failed = runWithStoreFixture(
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-MODEL-FAILURE' -Model 'gpt-5.6-sol'",
+    { extraEnv: { FAKE_RESPONSES_STATUS: "404" } },
+  );
+
+  expect(failed.result.status).not.toBe(0);
+  expect(failed.result.stderr).toContain("EggAi model verification returned HTTP 404");
+  expect(failed.result.stdout).not.toContain("Installing the Codex desktop app");
 });
 
 test("EggAi installation configures provider-scoped authentication without changing Codex login", () => {
   const fixtureKey = "sk-EGGDOC-POWERSHELL-INSTALL-FIXTURE";
-  const configured = runWithInstallerFixture(
-    undefined,
+  const configured = runWithStoreFixture(
     `-EggAi -SkKey '${fixtureKey}' -BaseUrl 'https://api.example.test/v1' -Language 'en-us' -Model 'gpt-5.6-sol'`,
     { extraEnv: { EGGAI_CODEX_ENV_SCOPE: "Process" } },
   );
 
   expect(configured.result.status, configured.result.stderr).toBe(0);
-  expect(configured.result.stdout).toContain("Done: Codex is installed and configured to use EggAi");
-  expect(configured.result.stdout).toContain("codex-cli 9.9.9 (EggDoc test fixture)");
+  expect(configured.result.stdout).toContain("Done: Codex desktop app is installed and configured to use EggAi");
+  expect(configured.result.stdout).toContain("Codex desktop app 26.715.4045.0");
+  expect(configured.result.stdout).toContain("Restart the Codex desktop app");
   expect(configured.result.stdout).not.toContain(fixtureKey);
-  expect(configured.codexCommands).not.toContain("login");
   expect(configured.config).toContain('model_provider = "eggai"');
   expect(configured.config).toContain('model = "gpt-5.6-sol"');
   expect(configured.config).toContain('base_url = "https://api.example.test/v1"');
@@ -343,9 +407,8 @@ test("EggAi installation configures provider-scoped authentication without chang
 test("EggAi installation restores the previous API key and config when verification fails", () => {
   const fixtureKey = "sk-EGGDOC-POWERSHELL-ROLLBACK-FIXTURE";
   const initialConfig = 'model = "keep-before-failed-env-save"\r\n';
-  const configured = runWithInstallerFixture(
-    undefined,
-    `-EggAi -SkKey '${fixtureKey}'`,
+  const configured = runWithStoreFixture(
+    `-EggAi -SkKey '${fixtureKey}' -Model 'gpt-5.6-sol'`,
     {
       extraEnv: {
         EGGDOC_TEST_FORCE_CODEX_ENV_VERIFY_FAILURE: "1",
@@ -357,21 +420,19 @@ test("EggAi installation restores the previous API key and config when verificat
 
   expect(
     configured.result.status,
-    `${configured.result.stdout}\n${configured.result.stderr}\nCommands:\n${configured.codexCommands}`,
+    `${configured.result.stdout}\n${configured.result.stderr}`,
   ).not.toBe(0);
   expect(configured.result.stderr).toContain("forced EGGAI_API_KEY verification failure");
   expect(configured.result.stdout).not.toContain("installed and configured to use EggAi");
   expect(configured.config).toBe(initialConfig);
   expect(configured.backup).toBe(initialConfig);
   expect(configured.environmentState).toBe("exists:sk-EGGDOC-PREVIOUS-KEY");
-  expect(configured.codexCommands).not.toContain("login");
   expect(configured.remainingTemporaryFiles).toEqual([]);
 });
 
 test("EggAi installation removes the new API key when no previous value existed", () => {
-  const configured = runWithInstallerFixture(
-    undefined,
-    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-NEW-KEY'",
+  const configured = runWithStoreFixture(
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-NEW-KEY' -Model 'gpt-5.6-sol'",
     {
       extraEnv: { EGGDOC_TEST_FORCE_CODEX_ENV_VERIFY_FAILURE: "1" },
     },
@@ -386,9 +447,8 @@ test("EggAi installation removes the new API key when no previous value existed"
 
 test("EggAi installation leaves the original config intact when atomic replacement fails", () => {
   const initialConfig = 'model = "keep-before-replace-failure"\r\n';
-  const configured = runWithInstallerFixture(
-    undefined,
-    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-REPLACE-FIXTURE'",
+  const configured = runWithStoreFixture(
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-REPLACE-FIXTURE' -Model 'gpt-5.6-sol'",
     {
       initialConfig,
       lockConfigDuringRun: true,
@@ -398,7 +458,6 @@ test("EggAi installation leaves the original config intact when atomic replaceme
   expect(configured.result.status).not.toBe(0);
   expect(configured.config).toBe(initialConfig);
   expect(configured.result.stdout).not.toContain("installed and configured to use EggAi");
-  expect(configured.codexCommands).not.toContain("login");
   expect(configured.remainingTemporaryFiles).toEqual([]);
 });
 
@@ -411,9 +470,8 @@ test("EggAi installation preserves existing configuration and is idempotent", ()
     '[model_providers.eggai.auth]\r\ntype = "bearer"\r\n\r\n' +
     '[model_providers.eggai.http_headers]\r\nx-old = "remove"\r\n\r\n' +
     '[model_providers.eggai.env_http_headers]\r\nx-env = "OLD_KEY"\r\n';
-  const configured = runWithInstallerFixture(
-    undefined,
-    `-EggAi -SkKey '${fixtureKey}' -Language 'zh-cn'`,
+  const configured = runWithStoreFixture(
+    `-EggAi -SkKey '${fixtureKey}' -Language 'zh-cn' -Model 'gpt-5.6-sol'`,
     {
       initialConfig,
       removeBackupAfterFirstRun: true,
@@ -425,7 +483,8 @@ test("EggAi installation preserves existing configuration and is idempotent", ()
   expect(configured.configs[0]).toBe(configured.configs[1]);
   expect(configured.backups).toEqual([initialConfig, undefined]);
   expect(configured.backup).toBeUndefined();
-  expect(configured.config).toContain('model = "keep-me"');
+  expect(configured.config).toContain('model = "gpt-5.6-sol"');
+  expect(configured.config).not.toContain('model = "keep-me"');
   expect(configured.config).toContain('[mcp_servers.keep]');
   expect(configured.config).not.toContain('[model_providers."eggai"]');
   expect(configured.config).not.toContain("https://old.example.test/v1");
@@ -443,6 +502,8 @@ test("default dry-run installs Codex without changing provider configuration", (
   expect(existsSync(codexHome)).toBe(false);
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Mode: default");
+  expect(result.stdout).toContain("Microsoft Store product ID: 9PLM9XGG6VKS");
+  expect(result.stdout).toContain("Expected package family: OpenAI.Codex_2p2nqsd0c76g0");
   expect(result.stdout).toContain("Would write config.toml: no");
   expect(result.stdout).toContain("Would change existing Codex login: no");
 });
@@ -469,7 +530,7 @@ test("EggAi dry-run accepts generated values, redacts the key, and never creates
   expect(result.stdout).not.toContain(fixtureKey);
   expect(result.stdout).toContain('base_url = "https://api.example.test/v1"');
   expect(result.stdout).toContain("Respond in English by default");
-  expect(result.stdout).toContain("Would install/update Codex: yes");
+  expect(result.stdout).toContain("Would ensure Codex desktop app is installed: yes");
   expect(result.stdout).toContain("Would write config.toml: yes");
   expect(result.stdout).toContain("Would save EGGAI_API_KEY for provider-scoped authentication: yes");
   expect(result.stdout).toContain("Would change existing Codex login: no");
@@ -478,11 +539,33 @@ test("EggAi dry-run accepts generated values, redacts the key, and never creates
   expect(result.stdout).toContain(`Backup file: ${codexHome}\\config.toml.eggai.bak`);
 });
 
+test("EggAi mode requires an explicit Codex model", () => {
+  const codexHome = unusedCodexHome();
+  const result = runPowerShell(
+    [
+      "-File",
+      scriptPath,
+      "-DryRun",
+      "-EggAi",
+      "-SkKey",
+      "sk-EGGDOC-POWERSHELL-MISSING-MODEL",
+    ],
+    codexHome,
+  );
+
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toContain("model is required with EggAi mode");
+  expect(result.stdout).not.toContain("Would ensure Codex desktop app is installed");
+  expect(existsSync(codexHome)).toBe(false);
+});
+
 test("EggAi dry-run keeps stable defaults and reports Windows recovery paths without writes", () => {
   const codexHome = unusedCodexHome();
-  const result = runPowerShell(["-File", scriptPath, "-DryRun", "-EggAi"], codexHome, {
-    PATH: "",
-  });
+  const result = runPowerShell(
+    ["-File", scriptPath, "-DryRun", "-EggAi", "-Model", "gpt-5.6-sol"],
+    codexHome,
+    { PATH: "" },
+  );
 
   expect(existsSync(codexHome)).toBe(false);
   expect(result.status).toBe(0);
@@ -490,7 +573,7 @@ test("EggAi dry-run keeps stable defaults and reports Windows recovery paths wit
   expect(result.stdout).toContain("Base URL: https://api.eggai.icu/v1");
   expect(result.stdout).toContain("Language: zh-cn");
   expect(result.stdout).toContain("API key: missing");
-  expect(result.stdout).toContain("would use the official PowerShell installer directly");
+  expect(result.stdout).toContain("Microsoft Store product 9PLM9XGG6VKS (OpenAI)");
   expect(result.stdout).toContain("Backup file:");
   expect(result.stdout).toContain("Would change existing Codex login: no");
 });

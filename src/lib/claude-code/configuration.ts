@@ -1,92 +1,76 @@
+import {
+  buildPowerShellInstallerCommand,
+  buildShellInstallerCommand,
+  quotePowerShellArgument,
+  quoteShellArgument,
+} from "../installer-command";
+
 function installerUrl(installerOrigin: string, filename: "claude-code.ps1" | "claude-code.sh") {
   return `${installerOrigin.replace(/\/$/, "")}/install/${filename}`;
 }
 
-function overrideInstallerUrl(
-  installerOrigin: string | undefined,
-  filename: "claude-code.ps1" | "claude-code.sh",
-) {
-  return installerOrigin ? `${installerOrigin.replace(/\/$/, "")}/${filename}` : undefined;
-}
-
 export function buildClaudeCodeShellDefaultInstallCommand(
   installerOrigin: string,
-  installerOriginOverride?: string,
 ) {
-  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "claude-code.sh");
-  const override = overrideUrl
-    ? `CLAUDE_CODE_INSTALLER_URL=${quoteShellArgument(overrideUrl)} `
-    : "";
-  return `curl -fsSL ${quoteShellArgument(installerUrl(installerOrigin, "claude-code.sh"))} | ${override}sh`;
+  return buildShellInstallerCommand({
+    scriptUrl: installerUrl(installerOrigin, "claude-code.sh"),
+  });
 }
 
 export function buildClaudeCodePowerShellDefaultInstallCommand(
   installerOrigin: string,
-  installerOriginOverride?: string,
 ) {
-  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "claude-code.ps1");
-  const override = overrideUrl
-    ? `$env:CLAUDE_CODE_INSTALLER_URL=${quotePowerShellArgument(overrideUrl)}; `
-    : "";
-  return `${override}irm ${quotePowerShellArgument(installerUrl(installerOrigin, "claude-code.ps1"))} | iex`;
+  return buildPowerShellInstallerCommand({
+    scriptUrl: installerUrl(installerOrigin, "claude-code.ps1"),
+  });
 }
 
 export function buildClaudeCodeShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  installerOriginOverride,
   models,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  installerOriginOverride?: string;
   models: ClaudeCodeModels;
 }) {
   const anthropicBaseUrl = normalizeClaudeCodeBaseUrl(baseUrl);
-  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "claude-code.sh");
-  const override = overrideUrl
-    ? `CLAUDE_CODE_INSTALLER_URL=${quoteShellArgument(overrideUrl)} `
-    : "";
-  return (
-    `curl -fsSL ${quoteShellArgument(installerUrl(installerOrigin, "claude-code.sh"))} | ${override}sh -s -- ` +
-    `--eggai --sk-key ${quoteShellArgument(apiKey)} --baseurl ${quoteShellArgument(anthropicBaseUrl)} ` +
+  return buildShellInstallerCommand({
+    argumentsText:
+      `--eggai --sk-key ${quoteShellArgument(apiKey)} --baseurl ${quoteShellArgument(anthropicBaseUrl)} ` +
     `--model ${quoteShellArgument(models.main)} ` +
     `--opus-model ${quoteShellArgument(models.opus)} ` +
     `--sonnet-model ${quoteShellArgument(models.sonnet)} ` +
     `--haiku-model ${quoteShellArgument(models.haiku)} ` +
-    `--fable-model ${quoteShellArgument(models.fable)}`
-  );
+      `--fable-model ${quoteShellArgument(models.fable)}`,
+    scriptUrl: installerUrl(installerOrigin, "claude-code.sh"),
+  });
 }
 
 export function buildClaudeCodePowerShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  installerOriginOverride,
   models,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  installerOriginOverride?: string;
   models: ClaudeCodeModels;
 }) {
   const anthropicBaseUrl = normalizeClaudeCodeBaseUrl(baseUrl);
-  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "claude-code.ps1");
-  const override = overrideUrl
-    ? `$env:CLAUDE_CODE_INSTALLER_URL=${quotePowerShellArgument(overrideUrl)}; `
-    : "";
-  return (
-    `${override}& ([scriptblock]::Create((irm ${quotePowerShellArgument(installerUrl(installerOrigin, "claude-code.ps1"))}))) ` +
-    `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} -BaseUrl ${quotePowerShellArgument(anthropicBaseUrl)} ` +
-    `-Model ${quotePowerShellArgument(models.main)} ` +
-    `-OpusModel ${quotePowerShellArgument(models.opus)} ` +
-    `-SonnetModel ${quotePowerShellArgument(models.sonnet)} ` +
-    `-HaikuModel ${quotePowerShellArgument(models.haiku)} ` +
-    `-FableModel ${quotePowerShellArgument(models.fable)}`
-  );
+  return buildPowerShellInstallerCommand({
+    argumentsText:
+      `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} -BaseUrl ${quotePowerShellArgument(anthropicBaseUrl)} ` +
+      `-Model ${quotePowerShellArgument(models.main)} ` +
+      `-OpusModel ${quotePowerShellArgument(models.opus)} ` +
+      `-SonnetModel ${quotePowerShellArgument(models.sonnet)} ` +
+      `-HaikuModel ${quotePowerShellArgument(models.haiku)} ` +
+      `-FableModel ${quotePowerShellArgument(models.fable)}`,
+    scriptUrl: installerUrl(installerOrigin, "claude-code.ps1"),
+  });
 }
 
 export function normalizeClaudeCodeBaseUrl(baseUrl: string) {
@@ -144,12 +128,4 @@ function compareModelVersions(left: string, right: string, family: string) {
     if (difference !== 0) return difference;
   }
   return left.localeCompare(right);
-}
-
-function quoteShellArgument(value: string) {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
-
-function quotePowerShellArgument(value: string) {
-  return `'${value.replace(/'/g, "''")}'`;
 }

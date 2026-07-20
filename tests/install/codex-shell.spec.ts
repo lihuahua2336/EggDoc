@@ -36,6 +36,7 @@ function runShell(args: string[]) {
       EGGAI_API_KEY: undefined,
       LANGUAGE: undefined,
       MODEL: undefined,
+      NPM_CONFIG_REGISTRY: undefined,
       PATH: testPath,
       SK_KEY: undefined,
     },
@@ -78,6 +79,7 @@ function runWithInstallerFixture(
     profileAsDirectory?: boolean;
     removeBackupAfterFirstRun?: boolean;
     runs?: number;
+    signalAfterConfigWrite?: boolean;
   } = {},
 ) {
   const root = mkdtempSync(path.join(tmpdir(), "eggdoc-codex-shell-"));
@@ -123,11 +125,32 @@ while [ "$#" -gt 0 ]; do
 done
 [ -z "\${FAKE_CURL_EXIT:-}" ] || exit "$FAKE_CURL_EXIT"
 [ "\${url%/models}" = "$url" ] || { printf '%s' "\${FAKE_MODELS_STATUS:-200}"; exit 0; }
+[ "\${url%/responses}" = "$url" ] || { printf '%s' "\${FAKE_RESPONSES_STATUS:-200}"; exit 0; }
 [ -n "$output" ] || exit 2
 cat "$FAKE_INSTALLER_SOURCE" > "$output"
 `,
   );
   chmodSync(fakeCurl, 0o755);
+
+  const signalMarker = path.join(root, "config-signal-sent");
+  if (options.signalAfterConfigWrite) {
+    const fakeMove = path.join(bin, "mv");
+    writeFileSync(
+      fakeMove,
+      `#!/bin/sh
+target=""
+for argument do target="$argument"; done
+/usr/bin/mv "$@"
+status=$?
+if [ "$status" -eq 0 ] && [ "$target" = "$FAKE_SIGNAL_CONFIG_PATH" ] && [ ! -e "$FAKE_SIGNAL_MARKER" ]; then
+  : > "$FAKE_SIGNAL_MARKER"
+  kill -TERM "$PPID"
+fi
+exit "$status"
+`,
+    );
+    chmodSync(fakeMove, 0o755);
+  }
 
   const results = [];
   const configs: Array<string | undefined> = [];
@@ -142,14 +165,20 @@ cat "$FAKE_INSTALLER_SOURCE" > "$output"
           BASE_URL: undefined,
           CODEX_MODEL: undefined,
           CODEX_HOME: shellPath(codexHome),
-          CODEX_INSTALLER_URL: "https://install.example.test/codex.sh",
           CODEX_PROFILE: shellPath(profilePath),
           EGGAI_API_KEY: undefined,
           FAKE_CODEX_LOG: shellPath(codexLog),
           FAKE_INSTALLER_SOURCE: shellPath(fixture),
+          FAKE_SIGNAL_CONFIG_PATH: options.signalAfterConfigWrite
+            ? shellPath(configPath)
+            : undefined,
+          FAKE_SIGNAL_MARKER: options.signalAfterConfigWrite
+            ? shellPath(signalMarker)
+            : undefined,
           HOME: shellPath(home),
           LANGUAGE: undefined,
           MODEL: undefined,
+          NPM_CONFIG_REGISTRY: undefined,
           PATH: `${bin}${path.delimiter}${fixturePath ?? ""}`,
           TMPDIR: shellPath(temporaryFiles),
           SK_KEY: undefined,
@@ -222,6 +251,18 @@ test("default installation verifies the installed Codex command before reporting
   expect(installed.remainingTemporaryFiles).toEqual([]);
 });
 
+test("the official Codex installer subprocess receives the mainland npm registry default", () => {
+  const installed = runWithInstallerFixture(
+    successfulInstaller.replace(
+      "set -eu",
+      'set -eu\n[ "$NPM_CONFIG_REGISTRY" = "https://registry.npmmirror.com" ] || exit 78',
+    ),
+  );
+
+  expect(installed.result.status, installed.result.stderr).toBe(0);
+  expect(installed.result.stdout).toContain("Done: Codex is installed");
+});
+
 test("default installation rejects invalid responses and preserves installer failure", () => {
   const html = runWithInstallerFixture("<!doctype html><title>Unavailable</title>\n");
   const whitespace = runWithInstallerFixture(" \n\t\n");
@@ -241,7 +282,13 @@ test("default installation rejects invalid responses and preserves installer fai
 
 test("EggAi installation verifies the endpoint before downloading the official installer", () => {
   const failed = runWithInstallerFixture(successfulInstaller, {
-    args: ["--eggai", "--sk-key", "sk-EGGDOC-SHELL-ENDPOINT-FAILURE"],
+    args: [
+      "--eggai",
+      "--sk-key",
+      "sk-EGGDOC-SHELL-ENDPOINT-FAILURE",
+      "--model",
+      "gpt-5.6-sol",
+    ],
     extraEnv: { FAKE_MODELS_STATUS: "503" },
   });
 
@@ -249,6 +296,17 @@ test("EggAi installation verifies the endpoint before downloading the official i
   expect(failed.result.stderr).toContain("EggAi Codex endpoint verification returned HTTP 503");
   expect(failed.result.stdout).toContain("Verifying the EggAi Codex endpoint");
   expect(failed.result.stdout).not.toContain("Installing or updating Codex");
+  expect(failed.installedCodex).toBe(false);
+});
+
+test("EggAi installation verifies the selected model before downloading the official installer", () => {
+  const failed = runWithInstallerFixture(successfulInstaller, {
+    args: ["--eggai", "--sk-key", "sk-EGGDOC-SHELL-MODEL-FAILURE", "--model", "gpt-5.6-sol"],
+    extraEnv: { FAKE_RESPONSES_STATUS: "404" },
+  });
+
+  expect(failed.result.status).not.toBe(0);
+  expect(failed.result.stderr).toContain("EggAi model verification returned HTTP 404");
   expect(failed.installedCodex).toBe(false);
 });
 
@@ -290,15 +348,24 @@ test("EggAi installation configures provider-scoped authentication without chang
 
 test("EggAi installation preserves existing configuration and is idempotent", () => {
   const fixtureKey = "sk-EGGDOC-SHELL-IDEMPOTENT-FIXTURE";
-  const initialConfig =
+  const initialConfig = (
     'model = "keep-me"\n\n[mcp_servers.keep]\ncommand = "keep-command"\n\n' +
     '[model_providers."eggai"] # replace this provider\n' +
     'base_url = "https://old.example.test/v1"\n\n' +
     '[model_providers.eggai.auth]\ntype = "bearer"\n\n' +
     '[model_providers.eggai.http_headers]\nx-old = "remove"\n\n' +
-    '[model_providers.eggai.env_http_headers]\nx-env = "OLD_KEY"\n';
+    '[model_providers.eggai.env_http_headers]\nx-env = "OLD_KEY"\n'
+  ).replaceAll("\n", "\r\n");
   const configured = runWithInstallerFixture(successfulInstaller, {
-    args: ["--eggai", "--sk-key", fixtureKey, "--language", "zh-cn"],
+    args: [
+      "--eggai",
+      "--sk-key",
+      fixtureKey,
+      "--language",
+      "zh-cn",
+      "--model",
+      "gpt-5.6-sol",
+    ],
     initialConfig,
     removeBackupAfterFirstRun: true,
     runs: 2,
@@ -308,7 +375,8 @@ test("EggAi installation preserves existing configuration and is idempotent", ()
   expect(configured.configs[0]).toBe(configured.configs[1]);
   expect(configured.backups).toEqual([initialConfig, undefined]);
   expect(configured.backup).toBeUndefined();
-  expect(configured.config).toContain('model = "keep-me"');
+  expect(configured.config).toContain('model = "gpt-5.6-sol"');
+  expect(configured.config).not.toContain('model = "keep-me"');
   expect(configured.config).toContain('[mcp_servers.keep]');
   expect(configured.config).not.toContain('[model_providers."eggai"]');
   expect(configured.config).not.toContain("https://old.example.test/v1");
@@ -323,7 +391,7 @@ test("EggAi installation restores existing configuration when API key persistenc
   const fixtureKey = "sk-EGGDOC-SHELL-ROLLBACK-FIXTURE";
   const initialConfig = 'model = "keep-before-failed-env-save"\n';
   const configured = runWithInstallerFixture(successfulInstaller, {
-    args: ["--eggai", "--sk-key", fixtureKey],
+    args: ["--eggai", "--sk-key", fixtureKey, "--model", "gpt-5.6-sol"],
     initialConfig,
     profileAsDirectory: true,
   });
@@ -338,10 +406,38 @@ test("EggAi installation restores existing configuration when API key persistenc
   expect(configured.remainingTemporaryFiles).toEqual([]);
 });
 
+test("EggAi installation restores configuration when interrupted after the atomic replace", () => {
+  const initialConfig = 'model = "keep-before-signal"\n';
+  const interrupted = runWithInstallerFixture(successfulInstaller, {
+    args: [
+      "--eggai",
+      "--sk-key",
+      "sk-EGGDOC-SHELL-SIGNAL-FIXTURE",
+      "--model",
+      "gpt-5.6-sol",
+    ],
+    initialConfig,
+    signalAfterConfigWrite: true,
+  });
+
+  expect(interrupted.result.status).toBe(143);
+  expect(interrupted.config).toBe(initialConfig);
+  expect(interrupted.environment).toBeUndefined();
+  expect(interrupted.profile).toBeUndefined();
+  expect(interrupted.result.stdout).not.toContain("installed and configured to use EggAi");
+  expect(interrupted.remainingTemporaryFiles).toEqual([]);
+});
+
 test("EggAi installation preserves an existing API key when profile persistence fails", () => {
   const previousEnvironment = "# existing\nEGGAI_API_KEY='sk-EGGDOC-SHELL-PREVIOUS'\nexport EGGAI_API_KEY\n";
   const configured = runWithInstallerFixture(successfulInstaller, {
-    args: ["--eggai", "--sk-key", "sk-EGGDOC-SHELL-NEW"],
+    args: [
+      "--eggai",
+      "--sk-key",
+      "sk-EGGDOC-SHELL-NEW",
+      "--model",
+      "gpt-5.6-sol",
+    ],
     initialEnvironment: previousEnvironment,
     profileAsDirectory: true,
   });
@@ -356,7 +452,13 @@ test("EggAi installation preserves an existing API key when profile persistence 
 test("EggAi installation refuses an incomplete managed block without changing configuration", () => {
   const malformedConfig = '# >>> eggai-codex\nmodel_provider = "eggai"\n';
   const configured = runWithInstallerFixture(successfulInstaller, {
-    args: ["--eggai", "--sk-key", "sk-EGGDOC-SHELL-MALFORMED-FIXTURE"],
+    args: [
+      "--eggai",
+      "--sk-key",
+      "sk-EGGDOC-SHELL-MALFORMED-FIXTURE",
+      "--model",
+      "gpt-5.6-sol",
+    ],
     initialConfig: malformedConfig,
   });
 
@@ -372,6 +474,7 @@ test("default dry-run installs Codex without changing provider configuration", (
 
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Mode: default");
+  expect(result.stdout).toContain("npm registry for installer subprocesses: https://registry.npmmirror.com");
   expect(result.stdout).toContain("Would install/update Codex: yes");
   expect(result.stdout).toContain("Would write config.toml: no");
   expect(result.stdout).toContain("Would change existing Codex login: no");
@@ -427,8 +530,21 @@ test("EggAi dry-run accepts generated parameters, redacts the key, and previews 
   expect(result.stdout).toContain("Backup file: /tmp/eggdoc-codex-shell-test/config.toml.eggai.bak");
 });
 
+test("EggAi mode requires an explicit Codex model", () => {
+  const result = runShell([
+    "--dry-run",
+    "--eggai",
+    "--sk-key",
+    "sk-EGGDOC-SHELL-MISSING-MODEL",
+  ]);
+
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toContain("model is required with --eggai");
+  expect(result.stdout).not.toContain("Would install/update Codex");
+});
+
 test("EggAi dry-run keeps zh-cn and the public EggAi Base URL as stable defaults", () => {
-  const result = runShell(["--dry-run", "--eggai"]);
+  const result = runShell(["--dry-run", "--eggai", "--model", "gpt-5.6-sol"]);
 
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Base URL: https://api.eggai.icu/v1");

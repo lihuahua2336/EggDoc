@@ -38,7 +38,7 @@ test("an active EggAi API Account exposes a ready default configuration group", 
 
   const panel = page.getByRole("region", { name: "Codex 安装" });
   await expect(panel.getByLabel("EggAi 配置分组")).toHaveValue("101");
-  await expect(panel.getByText("已就绪", { exact: true })).toBeVisible();
+  await expect(panel.getByText("模型 gpt-5.2", { exact: true })).toBeVisible();
   await expect(page.getByText("fixture-new-api-account")).toHaveCount(0);
 });
 

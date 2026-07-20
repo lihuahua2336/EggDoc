@@ -1,3 +1,10 @@
+import {
+  buildPowerShellInstallerCommand,
+  buildShellInstallerCommand,
+  quotePowerShellArgument,
+  quoteShellArgument,
+} from "../installer-command";
+
 export const CODEX_LANGUAGES = ["zh-cn", "en-us"] as const;
 export const CODEX_MODEL_PLACEHOLDER = "gpt-EGGAI-MODEL-ID";
 
@@ -7,95 +14,78 @@ function installerUrl(installerOrigin: string, filename: "codex.ps1" | "codex.sh
   return `${installerOrigin.replace(/\/$/, "")}/install/${filename}`;
 }
 
-function overrideInstallerUrl(installerOrigin: string | undefined, filename: "codex.ps1" | "codex.sh") {
-  return installerOrigin ? `${installerOrigin.replace(/\/$/, "")}/${filename}` : undefined;
-}
-
 const developerInstructions: Record<CodexLanguage, string> = {
   "en-us": "Respond in English by default unless the user explicitly asks for another language.",
   "zh-cn": "请默认使用简体中文回答，除非用户明确要求其他语言。",
 };
 
-export function buildShellDefaultInstallCommand(installerOrigin: string, installerOriginOverride?: string) {
+export function buildShellDefaultInstallCommand(installerOrigin: string) {
   const scriptUrl = installerUrl(installerOrigin, "codex.sh");
-  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "codex.sh");
-  const override = overrideUrl
-    ? `CODEX_INSTALLER_URL=${quoteShellArgument(overrideUrl)} `
-    : "";
-  return `curl -fsSL ${quoteShellArgument(scriptUrl)} | ${override}sh`;
+  return buildShellInstallerCommand({ scriptUrl });
 }
 
-export function buildPowerShellDefaultInstallCommand(
-  installerOrigin: string,
-  installerOriginOverride?: string,
-) {
+export function buildPowerShellDefaultInstallCommand(installerOrigin: string) {
   const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
-  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "codex.ps1");
-  const override = overrideUrl
-    ? `$env:CODEX_INSTALLER_URL=${quotePowerShellArgument(overrideUrl)}; `
-    : "";
-  return `${override}irm ${quotePowerShellArgument(scriptUrl)} | iex`;
+  return buildPowerShellInstallerCommand({ scriptUrl });
 }
 
 export function buildShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  installerOriginOverride,
   language,
   model,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  installerOriginOverride?: string;
   language: CodexLanguage;
   model: string;
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.sh");
-  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "codex.sh");
-  const override = overrideUrl
-    ? `CODEX_INSTALLER_URL=${quoteShellArgument(overrideUrl)} `
-    : "";
 
-  return (
-    `curl -fsSL ${quoteShellArgument(scriptUrl)} | ${override}sh -s -- ` +
-    "--eggai " +
+  return buildShellInstallerCommand({
+    argumentsText:
+      "--eggai " +
     `--sk-key ${quoteShellArgument(apiKey)} ` +
     `--baseurl ${quoteShellArgument(baseUrl)} ` +
     `--language ${quoteShellArgument(language)} ` +
-    `--model ${quoteShellArgument(model)}`
-  );
+      `--model ${quoteShellArgument(model)}`,
+    scriptUrl,
+    successCommand: '. "${CODEX_HOME:-$HOME/.codex}/eggai.env"',
+  });
 }
 
 export function buildPowerShellInstallCommand({
   apiKey,
   baseUrl,
   installerOrigin,
-  installerOriginOverride,
   language,
   model,
 }: {
   apiKey: string;
   baseUrl: string;
   installerOrigin: string;
-  installerOriginOverride?: string;
   language: CodexLanguage;
   model: string;
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.ps1");
-  const overrideUrl = overrideInstallerUrl(installerOriginOverride, "codex.ps1");
-  const override = overrideUrl
-    ? `$env:CODEX_INSTALLER_URL=${quotePowerShellArgument(overrideUrl)}; `
-    : "";
 
   return (
-    `${override}$env:EGGAI_CODEX_ENV_SCOPE='User'; ` +
-    `& ([scriptblock]::Create((irm ${quotePowerShellArgument(scriptUrl)}))) ` +
-    `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} ` +
-    `-BaseUrl ${quotePowerShellArgument(baseUrl)} ` +
-    `-Language ${quotePowerShellArgument(language)} ` +
-    `-Model ${quotePowerShellArgument(model)}`
+    `& { $eggdocHadCodexEnvScope=Test-Path Env:EGGAI_CODEX_ENV_SCOPE; ` +
+    `$eggdocPreviousCodexEnvScope=$env:EGGAI_CODEX_ENV_SCOPE; try { ` +
+    `$env:EGGAI_CODEX_ENV_SCOPE='User'; ` +
+      buildPowerShellInstallerCommand({
+        argumentsText:
+          `-EggAi -SkKey ${quotePowerShellArgument(apiKey)} ` +
+          `-BaseUrl ${quotePowerShellArgument(baseUrl)} ` +
+          `-Language ${quotePowerShellArgument(language)} ` +
+          `-Model ${quotePowerShellArgument(model)}`,
+        scriptUrl,
+      }) +
+    ` } finally { if ($eggdocHadCodexEnvScope) { ` +
+    `$env:EGGAI_CODEX_ENV_SCOPE=$eggdocPreviousCodexEnvScope ` +
+    `} else { Remove-Item Env:EGGAI_CODEX_ENV_SCOPE -ErrorAction SilentlyContinue } } }`
   );
 }
 
@@ -131,14 +121,6 @@ export function selectCodexModel(modelNames: string[]) {
   return [...candidates].sort((left, right) =>
     right.localeCompare(left, undefined, { numeric: true, sensitivity: "base" }),
   )[0];
-}
-
-function quoteShellArgument(value: string) {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
-
-function quotePowerShellArgument(value: string) {
-  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function escapeTomlBasicString(value: string) {

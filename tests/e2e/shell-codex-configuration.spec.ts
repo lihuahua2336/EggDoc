@@ -24,8 +24,8 @@ test("the default Shell action does not configure a third-party provider", async
   const panel = page.getByRole("region", { name: "Codex 安装" });
   await panel.getByRole("button", { name: "复制安装命令" }).click();
   await expect(panel.getByRole("button", { name: "安装命令已复制" })).toBeVisible();
-  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toBe(
-    "curl -fsSL 'https://eggdoc.pages.dev/install/codex.sh' | sh",
+  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
+    "'https://doc.eggai.icu/install/codex.sh'",
   );
 
 });
@@ -39,9 +39,11 @@ test("an authenticated Reader can copy a one-step EggAi Shell command", async ({
   await expect(panel.getByTestId("codex-quick-command")).not.toContainText("sk-REDACTED");
   await panel.getByRole("button", { name: "复制安装命令" }).click();
   await expect(panel.getByRole("button", { name: "安装命令已复制" })).toBeVisible();
-  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toBe(
-    "curl -fsSL 'https://eggdoc.pages.dev/install/codex.sh' | sh -s -- " +
-      `--eggai --sk-key '${FIXTURE_KEY}' --baseurl 'https://api.fixture.eggai.test/v1' --language 'zh-cn' --model 'gpt-5.2'`,
+  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
+    `--eggai --sk-key '${FIXTURE_KEY}' --baseurl 'https://api.fixture.eggai.test/v1' --language 'zh-cn' --model 'gpt-5.2'`,
+  );
+  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
+    '. "${CODEX_HOME:-$HOME/.codex}/eggai.env"',
   );
 
   await panel.getByText("分别复制配置", { exact: true }).click();

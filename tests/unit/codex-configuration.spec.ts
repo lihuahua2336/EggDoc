@@ -10,71 +10,45 @@ import {
 } from "../../src/lib/codex/configuration";
 
 test("default commands install Codex without selecting a third-party provider", () => {
-  expect(buildShellDefaultInstallCommand("https://docs.example.test/root")).toBe(
-    "curl -fsSL 'https://docs.example.test/root/install/codex.sh' | sh",
-  );
-  expect(buildPowerShellDefaultInstallCommand("https://docs.example.test/root")).toBe(
-    "irm 'https://docs.example.test/root/install/codex.ps1' | iex",
-  );
-});
+  const shell = buildShellDefaultInstallCommand("https://docs.example.test/root");
+  const powerShell = buildPowerShellDefaultInstallCommand("https://docs.example.test/root");
 
-test("Codex commands can use a deployment-provided installer mirror", () => {
-  expect(
-    buildShellDefaultInstallCommand(
-      "https://docs.example.test/root",
-      "https://mirror.example.test/codex",
-    ),
-  ).toBe(
-    "curl -fsSL 'https://docs.example.test/root/install/codex.sh' | " +
-      "CODEX_INSTALLER_URL='https://mirror.example.test/codex/codex.sh' sh",
+  expect(shell).toContain("'https://docs.example.test/root/install/codex.sh'");
+  expect(powerShell).toContain(
+    "Invoke-WebRequest -Uri 'https://docs.example.test/root/install/codex.ps1'",
   );
-  expect(
-    buildPowerShellDefaultInstallCommand(
-      "https://docs.example.test/root",
-      "https://mirror.example.test/codex",
-    ),
-  ).toBe(
-    "$env:CODEX_INSTALLER_URL='https://mirror.example.test/codex/codex.ps1'; " +
-      "irm 'https://docs.example.test/root/install/codex.ps1' | iex",
-  );
+  expect(powerShell).not.toContain("| iex");
 });
 
 test("Shell configuration safely quotes the selected credential, URL, and language", () => {
-  expect(
-    buildShellInstallCommand({
+  const command = buildShellInstallCommand({
       apiKey: "sk-reader's-$HOME",
       baseUrl: "https://api.example.test/v1?group=reader's",
       installerOrigin: "https://docs.example.test/root",
       language: "en-us",
       model: "openai/gpt-5.10-codex",
-    }),
-  ).toBe(
-    "curl -fsSL 'https://docs.example.test/root/install/codex.sh' | sh -s -- " +
-      "--eggai " +
-      "--sk-key 'sk-reader'\"'\"'s-$HOME' " +
-      "--baseurl 'https://api.example.test/v1?group=reader'\"'\"'s' " +
-      "--language 'en-us' " +
-      "--model 'openai/gpt-5.10-codex'",
-  );
+    });
+
+  expect(command).toContain("--sk-key 'sk-reader'\"'\"'s-$HOME'");
+  expect(command).toContain("--baseurl 'https://api.example.test/v1?group=reader'\"'\"'s'");
+  expect(command).toContain("--language 'en-us' --model 'openai/gpt-5.10-codex'");
+  expect(command).toContain('&& . "${CODEX_HOME:-$HOME/.codex}/eggai.env"');
 });
 
 test("PowerShell configuration safely quotes the selected credential, URL, language, and installer", () => {
-  expect(
-    buildPowerShellInstallCommand({
+  const command = buildPowerShellInstallCommand({
       apiKey: "sk-reader's-$HOME; `exit`",
       baseUrl: "https://api.example.test/v1?group=reader's&value=$HOME",
       installerOrigin: "https://docs.example.test/root's",
       language: "en-us",
       model: "gpt-5.6-sol",
-    }),
-  ).toBe(
-    "$env:EGGAI_CODEX_ENV_SCOPE='User'; " +
-      "& ([scriptblock]::Create((irm 'https://docs.example.test/root''s/install/codex.ps1'))) " +
-      "-EggAi -SkKey 'sk-reader''s-$HOME; `exit`' " +
-      "-BaseUrl 'https://api.example.test/v1?group=reader''s&value=$HOME' " +
-      "-Language 'en-us' " +
-      "-Model 'gpt-5.6-sol'",
-  );
+    });
+
+  expect(command).toContain("Invoke-WebRequest -Uri 'https://docs.example.test/root''s/install/codex.ps1'");
+  expect(command).toContain("-SkKey ''sk-reader''''s-$HOME; `exit`''");
+  expect(command).toContain("-BaseUrl ''https://api.example.test/v1?group=reader''''s&value=$HOME''");
+  expect(command).toContain("-Language ''en-us'' -Model ''gpt-5.6-sol''");
+  expect(command).not.toContain("ScriptBlock");
 });
 
 test("Codex provider configuration escapes TOML and never contains the API key", () => {

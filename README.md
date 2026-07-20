@@ -143,13 +143,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 | `EGGDOC_EGGAI_PLATFORM_URL` | 服务端 | EggAi API Account 激活入口 |
 | `EGGDOC_EGGAI_ECOSYSTEM_URL` | 服务端 | EggAi Ecosystem API 根地址 |
 | `PUBLIC_EGGAI_BASE_URL` | 公开 | 生成集成配置时使用的默认 API Base URL |
-| `PUBLIC_INSTALLER_ORIGIN` | 公开 | 托管安装脚本的站点 Origin |
-| `PUBLIC_CODEX_INSTALLER_ORIGIN` | 公开，可选 | Codex 官方安装器的中国可达镜像目录，按平台注入 `.sh` 或 `.ps1` URL |
-| `PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN` | 公开，可选 | Claude Code 官方安装器的中国可达镜像目录，按平台注入 `.sh` 或 `.ps1` URL |
+| `PUBLIC_INSTALLER_ORIGIN` | 公开 | EggDoc 安装脚本站点 Origin，默认为 `https://doc.eggai.icu` |
 
 前缀为 `PUBLIC_` 的值会进入客户端构建，不能包含秘密。服务端变量缺失或格式无效时，公开教程仍可访问，但认证和个性化配置接口会降级为不可用状态。
 
-中国大陆部署时，应优先把 `PUBLIC_INSTALLER_ORIGIN` 配置为用户可访问的自定义域名；如果官方安装器域名不可达，再配置上面两个可选镜像变量。EggAi 模式会直接验证 EggAi 端点，不依赖官方账户登录或官方账户 API 网络。
+中国大陆部署时，页面默认通过可访问的 `https://doc.eggai.icu` 提供安装脚本。macOS/Linux/WSL 安装 Codex CLI，Windows 通过 Microsoft Store 产品 `9PLM9XGG6VKS` 安装 OpenAI Codex 桌面应用，Claude 始终安装 Claude Code CLI。官方渠道不可达时会明确报错并停止；安装子进程若调用 npm，则默认使用 `https://registry.npmmirror.com`，且不永久修改 npm 配置。EggAi 模式独立验证 EggAi 端点和所选模型，不依赖官方账户登录网络。
 
 ## 常用命令
 

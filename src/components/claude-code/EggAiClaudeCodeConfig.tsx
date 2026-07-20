@@ -17,7 +17,6 @@ import { useEggAiApiAccount } from "@/components/codex/useEggAiApiAccount";
 import { Button } from "@/components/ui/button";
 import {
   CONFIGURATION_PLACEHOLDER,
-  PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
   PUBLIC_EGGAI_BASE_URL,
   PUBLIC_INSTALLER_ORIGIN,
 } from "@/config/public";
@@ -75,7 +74,7 @@ function QuickCopyCommand({
   return (
     <div className="mt-5 min-w-0 overflow-hidden rounded-sm border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
-        <span>{command.startsWith("irm") || command.startsWith("&") ? "PowerShell" : "Shell"}</span>
+        <span>{command.startsWith("$") ? "PowerShell" : "Shell"}</span>
         <Button
           aria-label={
             disabled
@@ -100,10 +99,10 @@ function QuickCopyCommand({
         </Button>
       </div>
       <pre
-        className="m-0 max-h-44 min-w-0 overflow-auto border-0 bg-card p-4 text-sm leading-6 text-foreground"
+        className="m-0 max-h-44 w-full max-w-full min-w-0 overflow-auto border-0 bg-card p-4 text-sm leading-6 text-foreground"
         data-testid="claude-code-quick-command"
       >
-        <code>{command}</code>
+        <code className="block !min-w-0 max-w-full whitespace-pre-wrap break-all">{command}</code>
       </pre>
       {status === "error" && (
         <p className="border-t border-border px-4 py-2 text-sm text-destructive" role="status">
@@ -168,28 +167,20 @@ export function EggAiClaudeCodeConfig() {
   };
   const officialCommand =
     platform === "windows"
-      ? buildClaudeCodePowerShellDefaultInstallCommand(
-          PUBLIC_INSTALLER_ORIGIN,
-          PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
-        )
-      : buildClaudeCodeShellDefaultInstallCommand(
-          PUBLIC_INSTALLER_ORIGIN,
-          PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
-        );
+      ? buildClaudeCodePowerShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN)
+      : buildClaudeCodeShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN);
   const eggAiCommand =
     platform === "windows"
       ? buildClaudeCodePowerShellInstallCommand({
           apiKey,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-          installerOriginOverride: PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
           models: modelsForPreview,
         })
       : buildClaudeCodeShellInstallCommand({
           apiKey,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-          installerOriginOverride: PUBLIC_CLAUDE_CODE_INSTALLER_ORIGIN,
           models: modelsForPreview,
         });
   const command = mode === "official" ? officialCommand : eggAiCommand;

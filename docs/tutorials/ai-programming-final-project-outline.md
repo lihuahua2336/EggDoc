@@ -334,7 +334,7 @@ Prompt：
 - 支持 dry-run
 - dry-run 只输出计划，不安装、不写文件、不登录
 - 真实执行时先验证 EggAi `/models`，再更新 `~/.codex/config.toml` 和 provider-scoped `EGGAI_API_KEY`，不调用 `codex login`
-- Windows 脚本仅在提供精确 Package ID 时使用 winget；失败后回退官方安装器，并给出明确错误
+- Windows Codex 脚本只通过 winget 安装 OpenAI 的精确 Microsoft Store 产品 `9PLM9XGG6VKS`；官方商店不可用时明确报错并停止，不切换第三方下载源
 ```
 
 概念穿插：

@@ -31,6 +31,7 @@ function runShell(args: string[], extraEnv: NodeJS.ProcessEnv = {}) {
     encoding: "utf8",
     env: {
       ...process.env,
+      NPM_CONFIG_REGISTRY: undefined,
       ...extraEnv,
     },
   });
@@ -171,6 +172,7 @@ test("Claude Code Shell dry-run delegates installation without changing configur
   expect(result.stderr).toBe("");
   expect(result.stdout).toContain("Claude Code installer dry run");
   expect(result.stdout).toContain("Official installer URL: https://claude.ai/install.sh");
+  expect(result.stdout).toContain("npm registry for installer subprocesses: https://registry.npmmirror.com");
   expect(result.stdout).toContain("Would install/update Claude Code: yes");
   expect(result.stdout).toContain("Would modify Claude Code configuration: no");
 });
@@ -302,6 +304,22 @@ chmod +x "$HOME/.local/bin/claude"
   expect(installed.result.stdout).toContain("9.9.9 (Claude Code test fixture)");
   expect(installed.settings).toBeUndefined();
   expect(installed.remainingTemporaryFiles).toEqual([]);
+});
+
+test("the Anthropic installer subprocess receives the mainland npm registry default", () => {
+  const installed = runWithInstallerFixture(`#!/usr/bin/env bash
+set -eu
+[ "$NPM_CONFIG_REGISTRY" = "https://registry.npmmirror.com" ] || exit 78
+mkdir -p "$HOME/.local/bin"
+cat > "$HOME/.local/bin/claude" <<'EOF'
+#!/bin/sh
+echo "9.9.9 (Claude Code registry fixture)"
+EOF
+chmod +x "$HOME/.local/bin/claude"
+`);
+
+  expect(installed.result.status, installed.result.stderr).toBe(0);
+  expect(installed.result.stdout).toContain("Claude Code registry fixture");
 });
 
 test("Claude Code Shell EggAi mode preserves existing settings and creates a backup", () => {

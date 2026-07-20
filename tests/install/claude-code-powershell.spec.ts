@@ -30,6 +30,7 @@ function runPowerShell(args: string[], extraEnv: NodeJS.ProcessEnv = {}) {
       encoding: "utf8",
       env: {
         ...process.env,
+        NPM_CONFIG_REGISTRY: undefined,
         ...extraEnv,
       },
     },
@@ -53,6 +54,7 @@ function runWithInstallerFixture(
   const home = path.join(root, "home");
   const temporaryFiles = path.join(root, "tmp");
   const fixture = path.join(root, "installer.ps1");
+  const registryStateLog = path.join(root, "npm-registry-state.log");
   mkdirSync(home);
   mkdirSync(temporaryFiles);
   writeFileSync(fixture, installerSource);
@@ -86,6 +88,8 @@ function runWithInstallerFixture(
     "try {",
     `  & $env:EGGDOC_CLAUDE_WRAPPER ${wrapperArguments}`,
     "} finally {",
+    "  $registryState = if (Test-Path Env:NPM_CONFIG_REGISTRY) { 'exists:' + $env:NPM_CONFIG_REGISTRY } else { 'missing' }",
+    "  [IO.File]::WriteAllText($env:EGGDOC_NPM_REGISTRY_STATE_LOG, $registryState)",
     "  if ($settingsLock) { $settingsLock.Dispose() }",
     "}",
   ].join("\n");
@@ -102,6 +106,7 @@ function runWithInstallerFixture(
           EGGDOC_CLAUDE_ENV_SCOPE: "Process",
           EGGDOC_LOCK_SETTINGS: options.lockSettings ? "1" : undefined,
           EGGDOC_NODE_BINARY: process.execPath,
+          EGGDOC_NPM_REGISTRY_STATE_LOG: registryStateLog,
           EGGDOC_SETTINGS_PATH: path.join(home, ".claude", "settings.json"),
           HOME: home,
           TEMP: temporaryFiles,
@@ -128,12 +133,16 @@ function runWithInstallerFixture(
   const settingsAcl = existsSync(settingsPath) ? readAcl(settingsPath) : undefined;
   const backupAcl = existsSync(backupPath) ? readAcl(backupPath) : undefined;
   const remainingTemporaryFiles = readdirSync(temporaryFiles);
+  const registryState = existsSync(registryStateLog)
+    ? readFileSync(registryStateLog, "utf8")
+    : undefined;
   rmSync(root, { force: true, recursive: true });
   return {
     backup,
     backupAcl,
     backups,
     remainingTemporaryFiles,
+    registryState,
     result: results.at(-1)!,
     results,
     settings,
@@ -154,6 +163,17 @@ test("the hosted Claude Code PowerShell installer has valid syntax", () => {
   expect(result.status).toBe(0);
 });
 
+test("Claude Code PowerShell dry-run returns control to the caller", () => {
+  const quotedScriptPath = scriptPath.replaceAll("'", "''");
+  const result = runPowerShell([
+    "-Command",
+    `& ([scriptblock]::Create([IO.File]::ReadAllText('${quotedScriptPath}'))) -DryRun; Write-Output 'CALLER_CONTINUED'`,
+  ]);
+
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("CALLER_CONTINUED");
+});
+
 test("Claude Code PowerShell dry-run delegates installation without changing configuration", () => {
   const result = runPowerShell(["-File", scriptPath, "-DryRun"]);
 
@@ -161,6 +181,7 @@ test("Claude Code PowerShell dry-run delegates installation without changing con
   expect(result.stderr).toBe("");
   expect(result.stdout).toContain("Claude Code installer dry run");
   expect(result.stdout).toContain("Official installer URL: https://claude.ai/install.ps1");
+  expect(result.stdout).toContain("npm registry for installer subprocesses: https://registry.npmmirror.com");
   expect(result.stdout).toContain("Would install/update Claude Code: yes");
   expect(result.stdout).toContain("Would modify Claude Code configuration: no");
 });
@@ -268,7 +289,7 @@ test("Claude Code PowerShell installer accepts official release channels and rej
 test("Claude Code PowerShell installer rejects invalid responses and preserves installer failure", () => {
   const html = runWithInstallerFixture("<!doctype html><title>Unavailable</title>\n");
   const whitespace = runWithInstallerFixture(" \n\t\n");
-  const failed = runWithInstallerFixture('& "$env:ComSpec" /c "exit 42"\n', true);
+  const failed = runWithInstallerFixture("exit 42\n", true);
 
   expect(html.result.status).not.toBe(0);
   expect(html.result.stderr).toContain("returned HTML instead of a script");
@@ -279,6 +300,7 @@ test("Claude Code PowerShell installer rejects invalid responses and preserves i
   expect(failed.result.status).not.toBe(0);
   expect(failed.result.stderr).toContain("Anthropic installer exited with code 42");
   expect(failed.result.stdout).not.toContain("Done: Claude Code is installed");
+  expect(failed.registryState).toBe("missing");
   expect(failed.remainingTemporaryFiles).toEqual([]);
 });
 
@@ -294,6 +316,53 @@ Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBi
   expect(installed.result.stdout).toContain(process.version);
   expect(installed.settings).toBeUndefined();
   expect(installed.remainingTemporaryFiles).toEqual([]);
+});
+
+test("Claude Code PowerShell scopes the npm registry to the installer subprocess", () => {
+  const installed = runWithInstallerFixture(`
+if ($env:NPM_CONFIG_REGISTRY -cne "https://registry.npmmirror.com") { exit 78 }
+$claudeBin = Join-Path $env:USERPROFILE ".local\\bin"
+New-Item -ItemType Directory -Force -Path $claudeBin | Out-Null
+Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBin "claude.exe") -Force
+`);
+  const failed = runWithInstallerFixture(
+    'if ($env:NPM_CONFIG_REGISTRY -cne "https://registry.npmmirror.com") { exit 78 }; exit 42',
+    true,
+  );
+
+  expect(installed.result.status, installed.result.stderr).toBe(0);
+  expect(installed.registryState).toBe("missing");
+  expect(failed.result.status).not.toBe(0);
+  expect(failed.result.stderr).toContain("Anthropic installer exited with code 42");
+  expect(failed.registryState).toBe("missing");
+});
+
+test("Claude Code PowerShell restores an existing npm registry after success and failure", () => {
+  const previousRegistry = "https://registry.example.test/custom";
+  const installed = runWithInstallerFixture(
+    `
+if ($env:NPM_CONFIG_REGISTRY -cne "${previousRegistry}") { exit 78 }
+$claudeBin = Join-Path $env:USERPROFILE ".local\\bin"
+New-Item -ItemType Directory -Force -Path $claudeBin | Out-Null
+Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBin "claude.exe") -Force
+`,
+    false,
+    "",
+    undefined,
+    { NPM_CONFIG_REGISTRY: previousRegistry },
+  );
+  const failed = runWithInstallerFixture(
+    `if ($env:NPM_CONFIG_REGISTRY -cne "${previousRegistry}") { exit 78 }; exit 42`,
+    true,
+    "",
+    undefined,
+    { NPM_CONFIG_REGISTRY: previousRegistry },
+  );
+
+  expect(installed.result.status, installed.result.stderr).toBe(0);
+  expect(installed.registryState).toBe(`exists:${previousRegistry}`);
+  expect(failed.result.status).not.toBe(0);
+  expect(failed.registryState).toBe(`exists:${previousRegistry}`);
 });
 
 test("Claude Code PowerShell EggAi mode preserves existing settings and creates a backup", () => {

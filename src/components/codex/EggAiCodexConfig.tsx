@@ -21,7 +21,6 @@ import { useEggAiApiAccount } from "@/components/codex/useEggAiApiAccount";
 import {
   CONFIGURATION_PLACEHOLDER,
   DEFAULT_CODEX_LANGUAGE,
-  PUBLIC_CODEX_INSTALLER_ORIGIN,
   PUBLIC_EGGAI_BASE_URL,
   PUBLIC_INSTALLER_ORIGIN,
 } from "@/config/public";
@@ -81,7 +80,7 @@ function QuickCopyCommand({
   return (
     <div className="mt-5 min-w-0 overflow-hidden rounded-sm border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-2 text-xs font-semibold text-muted-foreground">
-        <span>{command.startsWith("irm") || command.startsWith("$env") ? "PowerShell" : "Shell"}</span>
+        <span>{command.startsWith("$") ? "PowerShell" : "Shell"}</span>
         <Button
           aria-label={
             disabled ? "登录 EggAi 后复制" : status === "copied" ? "安装命令已复制" : "复制安装命令"
@@ -102,10 +101,10 @@ function QuickCopyCommand({
         </Button>
       </div>
       <pre
-        className="m-0 max-h-44 min-w-0 overflow-auto border-0 bg-card p-4 text-sm leading-6 text-foreground"
+        className="m-0 max-h-44 w-full max-w-full min-w-0 overflow-auto border-0 bg-card p-4 text-sm leading-6 text-foreground"
         data-testid="codex-quick-command"
       >
-        <code>{command}</code>
+        <code className="block !min-w-0 max-w-full whitespace-pre-wrap break-all">{command}</code>
       </pre>
       {status === "error" && (
         <p className="border-t border-border px-4 py-2 text-sm text-destructive" role="status">
@@ -209,15 +208,14 @@ export function EggAiCodexConfig() {
 
   const officialCommand =
     platform === "windows"
-      ? buildPowerShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN, PUBLIC_CODEX_INSTALLER_ORIGIN)
-      : buildShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN, PUBLIC_CODEX_INSTALLER_ORIGIN);
+      ? buildPowerShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN)
+      : buildShellDefaultInstallCommand(PUBLIC_INSTALLER_ORIGIN);
   const buildEggAiCommand = (key: string) =>
     platform === "windows"
       ? buildPowerShellInstallCommand({
           apiKey: key,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-          installerOriginOverride: PUBLIC_CODEX_INSTALLER_ORIGIN,
           language: DEFAULT_CODEX_LANGUAGE,
           model: commandModel,
         })
@@ -225,7 +223,6 @@ export function EggAiCodexConfig() {
           apiKey: key,
           baseUrl,
           installerOrigin: PUBLIC_INSTALLER_ORIGIN,
-          installerOriginOverride: PUBLIC_CODEX_INSTALLER_ORIGIN,
           language: DEFAULT_CODEX_LANGUAGE,
           model: commandModel,
         });
@@ -394,7 +391,7 @@ export function EggAiCodexConfig() {
             onClick={() => selectPlatform("unix")}
             type="button"
           >
-            macOS / Linux
+            macOS / Linux / WSL
           </button>
           <button
             aria-pressed={platform === "windows"}

@@ -6,8 +6,6 @@ param(
   [ValidateSet("zh-cn", "en-us")]
   [string]$Language,
   [string]$Model,
-  [Alias("CodexPackageId")]
-  [string]$CodexPackage,
   [switch]$EggAi,
   [switch]$DryRun
 )
@@ -15,7 +13,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $DefaultBaseUrl = "https://api.eggai.icu/v1"
-$OfficialInstallerUrl = if ($env:CODEX_INSTALLER_URL) { $env:CODEX_INSTALLER_URL } else { "https://chatgpt.com/codex/install.ps1" }
+$CodexStoreProductId = "9PLM9XGG6VKS"
+$CodexPackageName = "OpenAI.Codex"
+$CodexPackageFamilyName = "OpenAI.Codex_2p2nqsd0c76g0"
+$WingetNoApplicableUpgradeExitCode = 0x8A15002B
 if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
   $BaseUrl = if ($env:BASE_URL) { $env:BASE_URL } else { $DefaultBaseUrl }
 }
@@ -28,9 +29,6 @@ if ([string]::IsNullOrWhiteSpace($Language)) {
 if ([string]::IsNullOrWhiteSpace($Model)) {
   $Model = if ($env:MODEL) { $env:MODEL } else { $env:CODEX_MODEL }
 }
-if ([string]::IsNullOrWhiteSpace($CodexPackage)) {
-  $CodexPackage = $env:CODEX_PACKAGE_ID
-}
 $EnvironmentScope = if ($env:EGGAI_CODEX_ENV_SCOPE) { $env:EGGAI_CODEX_ENV_SCOPE } else { "User" }
 $GatewayTimeoutSeconds = if ($env:EGGDOC_GATEWAY_TIMEOUT_SECONDS) { $env:EGGDOC_GATEWAY_TIMEOUT_SECONDS } else { "60" }
 $EggAiMode = $EggAi.IsPresent
@@ -40,12 +38,11 @@ function Write-Step {
 
   switch ($Key) {
     "verify" { Write-Host "Verifying the EggAi Codex endpoint..." }
-    "winget" { Write-Host "Installing or updating Codex with an exact winget package ID..." }
-    "official" { Write-Host "Installing or updating Codex with the official Codex CLI installer..." }
+    "store" { Write-Host "Installing or updating the Codex desktop app from Microsoft Store..." }
     "config" { Write-Host "Writing EggAi Codex configuration..." }
     "env" { Write-Host "Saving EggAi API key for provider-scoped authentication..." }
-    "done" { Write-Host "Done: Codex is installed." }
-    "eggai-done" { Write-Host "Done: Codex is installed and configured to use EggAi." }
+    "done" { Write-Host "Done: Codex desktop app is installed." }
+    "eggai-done" { Write-Host "Done: Codex desktop app is installed and configured to use EggAi." }
     default { Write-Host $Key }
   }
 }
@@ -59,14 +56,11 @@ function Get-WingetCommand {
   Get-Command winget -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
-function Get-CodexCommand {
-  Get-Command codex -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-}
-
 function Test-EggAiCodexEndpoint {
   param(
     [string]$ProviderBaseUrl,
-    [string]$ApiKey
+    [string]$ApiKey,
+    [string]$RequestedModel
   )
 
   try {
@@ -79,6 +73,24 @@ function Test-EggAiCodexEndpoint {
     if ([int]$response.StatusCode -lt 200 -or [int]$response.StatusCode -ge 300) {
       Throw-InstallError "EggAi Codex endpoint verification returned HTTP $($response.StatusCode)."
     }
+    if (-not [string]::IsNullOrWhiteSpace($RequestedModel)) {
+      $verificationBody = @{
+        model = $RequestedModel
+        input = "Reply with OK."
+        max_output_tokens = 16
+      } | ConvertTo-Json -Compress
+      $modelResponse = Invoke-WebRequest `
+        -Uri "$($ProviderBaseUrl.TrimEnd('/'))/responses" `
+        -Method Post `
+        -Headers @{ Authorization = "Bearer $ApiKey" } `
+        -ContentType "application/json" `
+        -Body $verificationBody `
+        -TimeoutSec $GatewayTimeoutSeconds `
+        -UseBasicParsing
+      if ([int]$modelResponse.StatusCode -lt 200 -or [int]$modelResponse.StatusCode -ge 300) {
+        Throw-InstallError "EggAi model verification returned HTTP $($modelResponse.StatusCode)."
+      }
+    }
   } catch {
     if ($_.Exception.Message -like "EggAi Codex installer failed:*") {
       throw
@@ -87,100 +99,52 @@ function Test-EggAiCodexEndpoint {
   }
 }
 
-function Get-TemporaryDirectory {
-  $temporaryDirectory = if (-not [string]::IsNullOrWhiteSpace($env:TEMP)) {
-    $env:TEMP
-  } elseif (-not [string]::IsNullOrWhiteSpace($env:TMP)) {
-    $env:TMP
-  } else {
-    [IO.Path]::GetTempPath()
-  }
-  New-Item -ItemType Directory -Force -Path $temporaryDirectory | Out-Null
-  $temporaryDirectory
-}
-
-function Get-CodexBinCandidates {
-  $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
-  $userHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+function Get-CodexDesktopPackage {
   @(
-    if ($env:CODEX_INSTALL_DIR) {
-      $env:CODEX_INSTALL_DIR
-    }
-    if ($env:LOCALAPPDATA) {
-      Join-Path $env:LOCALAPPDATA "Programs\OpenAI\Codex\bin"
-      Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links"
-    }
-    (Join-Path $codexHome "bin")
-    (Join-Path $userHome ".local\bin")
-    (Join-Path $userHome "bin")
+    Get-AppxPackage -Name $CodexPackageName -ErrorAction SilentlyContinue |
+      Where-Object { $_.PackageFamilyName -eq $CodexPackageFamilyName } |
+      Sort-Object Version -Descending
+  ) | Select-Object -First 1
+}
+
+function Install-CodexDesktopApp {
+  $installedPackage = Get-CodexDesktopPackage
+  $winget = Get-WingetCommand
+  if (-not $winget) {
+    $operation = if ($installedPackage) { "update" } else { "install" }
+    Throw-InstallError "winget is required to $operation the official Codex desktop app from Microsoft Store (product $CodexStoreProductId). Install or update App Installer, then retry."
+  }
+
+  $wingetAction = if ($installedPackage) { "upgrade" } else { "install" }
+  $wingetArguments = @(
+    $wingetAction,
+    "--id", $CodexStoreProductId,
+    "--exact",
+    "--source", "msstore",
+    "--accept-source-agreements",
+    "--accept-package-agreements",
+    "--disable-interactivity"
   )
-}
-
-function Test-CodexBinaryDirectory {
-  param([string]$Directory)
-  foreach ($fileName in @("codex.exe", "codex.cmd", "codex.ps1", "codex")) {
-    if (Test-Path -LiteralPath (Join-Path $Directory $fileName)) {
-      return $true
-    }
+  $wingetProcess = Start-Process `
+    -FilePath $winget.Source `
+    -ArgumentList $wingetArguments `
+    -Wait `
+    -PassThru `
+    -NoNewWindow
+  $wingetExitCode = $wingetProcess.ExitCode
+  $alreadyCurrent = $wingetAction -eq "upgrade" -and $wingetExitCode -eq $WingetNoApplicableUpgradeExitCode
+  if ($wingetExitCode -ne 0 -and -not $alreadyCurrent) {
+    Throw-InstallError "Microsoft Store could not $wingetAction the official Codex desktop app (product $CodexStoreProductId, exit code $wingetExitCode)."
   }
-  return $false
-}
-
-function Add-CodexBinToPath {
-  $binCandidates = Get-CodexBinCandidates
-
-  $pathEntries = @($env:PATH -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-  foreach ($codexBin in $binCandidates) {
-    if (-not (Test-CodexBinaryDirectory $codexBin)) {
-      continue
-    }
-    $alreadyPresent = $pathEntries | Where-Object {
-      $_.TrimEnd("\") -ieq $codexBin.TrimEnd("\")
-    }
-    if (-not $alreadyPresent) {
-      $env:PATH = "$codexBin;$env:PATH"
-    }
-    break
+  if ($alreadyCurrent) {
+    Write-Host "Codex desktop app is already up to date."
   }
-}
 
-function Install-CodexWithOfficialInstaller {
-  $temporaryInstaller = Join-Path (Get-TemporaryDirectory) "eggdoc-codex-$([guid]::NewGuid()).ps1"
-  try {
-    try {
-      Invoke-WebRequest -Uri $OfficialInstallerUrl -OutFile $temporaryInstaller -TimeoutSec 300 -UseBasicParsing
-    } catch {
-      Throw-InstallError "could not download the official Codex installer: $($_.Exception.Message)"
-    }
-
-    $installerSource = Get-Content -LiteralPath $temporaryInstaller -Raw
-    if ([string]::IsNullOrWhiteSpace($installerSource)) {
-      Throw-InstallError "the official Codex installer response was empty."
-    }
-    if ($installerSource.TrimStart().StartsWith("<")) {
-      Throw-InstallError "the official Codex installer returned HTML instead of a script. Check network and region availability."
-    }
-
-    if (-not $env:CODEX_NON_INTERACTIVE) {
-      $env:CODEX_NON_INTERACTIVE = "1"
-    }
-    try {
-      $installer = [scriptblock]::Create($installerSource)
-      $global:LASTEXITCODE = 0
-      & $installer
-      $installerExitCode = $LASTEXITCODE
-      if ($installerExitCode -ne 0) {
-        Throw-InstallError "the official Codex installer exited with code $installerExitCode."
-      }
-    } catch {
-      if ($_.Exception.Message -like "EggAi Codex installer failed:*") {
-        throw
-      }
-      Throw-InstallError "could not execute the official Codex installer: $($_.Exception.Message)"
-    }
-  } finally {
-    Remove-Item -LiteralPath $temporaryInstaller -Force -ErrorAction SilentlyContinue
+  $installedPackage = Get-CodexDesktopPackage
+  if (-not $installedPackage) {
+    Throw-InstallError "Microsoft Store reported success, but the expected Codex package $CodexPackageFamilyName was not found."
   }
+  return $installedPackage
 }
 
 function ConvertTo-TomlString {
@@ -205,32 +169,22 @@ function Write-DryRunPlan {
     [string]$Instructions
   )
 
-  $winget = if ([string]::IsNullOrWhiteSpace($CodexPackage)) { $null } else { Get-WingetCommand }
-  Add-CodexBinToPath
-  $codex = Get-CodexCommand
+  $winget = Get-WingetCommand
+  $codexPackage = Get-CodexDesktopPackage
 
-  Write-Host "Codex installer dry run"
+  Write-Host "Codex desktop app installer dry run"
   Write-Host "Mode: $(if ($EggAiMode) { 'eggai' } else { 'default' })"
-  Write-Host "Codex package ID: $(if ($CodexPackage) { $CodexPackage } else { 'not specified' })"
+  Write-Host "Microsoft Store product ID: $CodexStoreProductId"
+  Write-Host "Expected package family: $CodexPackageFamilyName"
   Write-Host "Codex home: $(Split-Path -Parent $ConfigFile)"
-  Write-Host "Official installer: $OfficialInstallerUrl"
   Write-Host ""
   Write-Host "Windows scenario check:"
-
-  if ([string]::IsNullOrWhiteSpace($CodexPackage)) {
-    Write-Host "- Codex install/update path: would use the official PowerShell installer directly"
-  } elseif ($winget) {
-    Write-Host "- winget exists: yes ($($winget.Source))"
-    Write-Host "- Codex install/update path: would use --id $CodexPackage --exact"
-    Write-Host "- winget failure path: official installer fallback is available"
-  } else {
-    Write-Host "- winget exists: no"
-    Write-Host "- Codex install/update path: would use the official PowerShell installer fallback"
-  }
-  Write-Host "- Codex command exists: $(if ($codex) { "yes ($($codex.Source))" } else { 'no' })"
+  Write-Host "- winget exists: $(if ($winget) { "yes ($($winget.Source))" } else { 'no' })"
+  Write-Host "- Codex desktop app exists: $(if ($codexPackage) { "yes ($($codexPackage.Version))" } else { 'no' })"
+  Write-Host "- Install source: Microsoft Store product $CodexStoreProductId (OpenAI)"
 
   Write-Host ""
-  Write-Host "Would install/update Codex: yes"
+  Write-Host "Would ensure Codex desktop app is installed: yes"
   if (-not $EggAiMode) {
     Write-Host "Would write config.toml: no"
     Write-Host "Would change existing Codex login: no"
@@ -241,7 +195,7 @@ function Write-DryRunPlan {
   Write-Host "Backup file: $ConfigFile.eggai.bak"
   Write-Host "Base URL: $ProviderBaseUrl"
   Write-Host "Language: $Language"
-  Write-Host "Model: $(if ($Model) { $Model } else { 'Codex provider default' })"
+  Write-Host "Model: $Model"
   if ([string]::IsNullOrWhiteSpace($Sk_Key)) {
     Write-Host "API key: missing"
   } else {
@@ -257,9 +211,7 @@ function Write-DryRunPlan {
   Write-Host "# Managed by EggDoc's EggAi Codex installer."
   Write-Host 'model_provider = "eggai"'
   Write-Host "developer_instructions = $(ConvertTo-TomlString $Instructions)"
-  if (-not [string]::IsNullOrWhiteSpace($Model)) {
-    Write-Host "model = $(ConvertTo-TomlString $Model)"
-  }
+  Write-Host "model = $(ConvertTo-TomlString $Model)"
   Write-Host "# <<< eggai-codex"
   Write-Host ""
   Write-Host "[model_providers.eggai]"
@@ -458,6 +410,43 @@ function Restore-EnvironmentVariableState {
   [Environment]::SetEnvironmentVariable("EGGAI_API_KEY", $value, $State.Target)
 }
 
+function Send-EnvironmentChangeNotification {
+  if (-not ("EggDoc.NativeMethods" -as [type])) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+namespace EggDoc {
+  public static class NativeMethods {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(
+      IntPtr hWnd,
+      uint message,
+      UIntPtr wParam,
+      string lParam,
+      uint flags,
+      uint timeout,
+      out UIntPtr result);
+  }
+}
+"@
+  }
+
+  [UIntPtr]$result = [UIntPtr]::Zero
+  $sent = [EggDoc.NativeMethods]::SendMessageTimeout(
+    [IntPtr]0xffff,
+    0x001a,
+    [UIntPtr]::Zero,
+    "Environment",
+    0x0002,
+    5000,
+    [ref]$result
+  )
+  if ($sent -eq [IntPtr]::Zero) {
+    Throw-InstallError "Windows could not notify running applications about the updated user environment."
+  }
+}
+
 function Set-EggAiApiKey {
   param(
     [string]$ApiKey,
@@ -490,6 +479,9 @@ function Set-EggAiApiKey {
     if ($savedKey -cne $ApiKey -or $processKey -cne $ApiKey) {
       Throw-InstallError "EGGAI_API_KEY could not be verified in the $TargetName environment."
     }
+    if ($target -eq [EnvironmentVariableTarget]::User) {
+      Send-EnvironmentChangeNotification
+    }
   } catch {
     $writeError = $_
     $restoreErrors = New-Object System.Collections.Generic.List[string]
@@ -501,6 +493,13 @@ function Set-EggAiApiKey {
     if ($target -ne [EnvironmentVariableTarget]::Process) {
       try {
         Restore-EnvironmentVariableState -State $processState
+      } catch {
+        $restoreErrors.Add($_.Exception.Message)
+      }
+    }
+    if ($target -eq [EnvironmentVariableTarget]::User) {
+      try {
+        Send-EnvironmentChangeNotification
       } catch {
         $restoreErrors.Add($_.Exception.Message)
       }
@@ -538,15 +537,15 @@ if ($EggAiMode) {
   if (-not [string]::IsNullOrWhiteSpace($baseUri.Fragment)) {
     Throw-InstallError "baseurl must not contain a fragment."
   }
-  if (-not [string]::IsNullOrWhiteSpace($Model) -and $Model -notmatch '^[A-Za-z0-9._:/-]+$') {
+  if ([string]::IsNullOrWhiteSpace($Model)) {
+    Throw-InstallError "model is required with EggAi mode. Set MODEL, CODEX_MODEL, or pass -Model."
+  }
+  if ($Model -notmatch '^[A-Za-z0-9._:/-]+$') {
     Throw-InstallError "model contains unsupported characters."
   }
   if ($Sk_Key -match '[\x00-\x20\x7f]') {
     Throw-InstallError "sk-key must not contain whitespace or control characters."
   }
-}
-if (-not [string]::IsNullOrWhiteSpace($CodexPackage) -and $CodexPackage -notmatch '^[A-Za-z0-9._-]+$') {
-  Throw-InstallError "CodexPackage must be an exact winget package ID."
 }
 if ($EggAiMode -and $EnvironmentScope -ne "Process" -and $EnvironmentScope -ne "User") {
   Throw-InstallError "EGGAI_CODEX_ENV_SCOPE must be Process or User."
@@ -562,7 +561,7 @@ $configFile = Join-Path $codexHome "config.toml"
 
 if ($DryRun) {
   Write-DryRunPlan -ConfigFile $configFile -ProviderBaseUrl $BaseUrl -Instructions (Get-DeveloperInstructions)
-  exit 0
+  return
 }
 
 if ($EggAiMode -and [string]::IsNullOrWhiteSpace($Sk_Key)) {
@@ -570,68 +569,17 @@ if ($EggAiMode -and [string]::IsNullOrWhiteSpace($Sk_Key)) {
 }
 if ($EggAiMode) {
   Write-Step "verify"
-  Test-EggAiCodexEndpoint -ProviderBaseUrl $BaseUrl -ApiKey $Sk_Key
+  Test-EggAiCodexEndpoint -ProviderBaseUrl $BaseUrl -ApiKey $Sk_Key -RequestedModel $Model
 }
 
-$wingetInstallSucceeded = $false
-if (-not [string]::IsNullOrWhiteSpace($CodexPackage)) {
-  $winget = Get-WingetCommand
-  if ($winget) {
-    Write-Step "winget"
-    $global:LASTEXITCODE = 0
-    $listOutput = @(& $winget.Source list --id $CodexPackage --exact --source msstore --disable-interactivity 2>$null)
-    $listExitCode = $LASTEXITCODE
-    if ($listExitCode -eq 0 -and ($listOutput -join "`n") -match [regex]::Escape($CodexPackage)) {
-      $global:LASTEXITCODE = 0
-      & $winget.Source upgrade --id $CodexPackage --exact --source msstore --accept-source-agreements --accept-package-agreements --disable-interactivity
-    } else {
-      $global:LASTEXITCODE = 0
-      & $winget.Source install --id $CodexPackage --exact --source msstore --accept-source-agreements --accept-package-agreements --disable-interactivity
-    }
-    $wingetExitCode = $LASTEXITCODE
-    if ($wingetExitCode -eq 0) {
-      $wingetInstallSucceeded = $true
-    } else {
-      Write-Warning "winget could not install or update the exact package '$CodexPackage' (exit code $wingetExitCode); using the official installer."
-    }
-  } else {
-    Write-Warning "winget is unavailable; using the official Codex installer."
-  }
-}
-
-Add-CodexBinToPath
-if (-not $wingetInstallSucceeded -or -not (Get-CodexCommand)) {
-  Write-Step "official"
-  Install-CodexWithOfficialInstaller
-}
-
-Add-CodexBinToPath
-$codexCommand = Get-CodexCommand
-if (-not $codexCommand) {
-  Throw-InstallError "Codex was installed, but the codex command is not on PATH. Restart PowerShell and retry."
-}
-$codexExecutable = if (-not [string]::IsNullOrWhiteSpace($codexCommand.Path)) {
-  $codexCommand.Path
-} elseif (-not [string]::IsNullOrWhiteSpace($codexCommand.Source)) {
-  $codexCommand.Source
-} else {
-  $codexCommand.Name
-}
-
-$global:LASTEXITCODE = 0
-$versionOutput = @(& $codexExecutable --version)
-if ($LASTEXITCODE -ne 0) {
-  Throw-InstallError "codex --version failed after installation with exit code $LASTEXITCODE."
-}
-$versionText = ($versionOutput -join [Environment]::NewLine).Trim()
-if ([string]::IsNullOrWhiteSpace($versionText)) {
-  Throw-InstallError "codex --version returned no version information."
-}
+Write-Step "store"
+$codexPackage = Install-CodexDesktopApp
+$versionText = "Codex desktop app $($codexPackage.Version)"
 
 if (-not $EggAiMode) {
   Write-Step "done"
   Write-Host $versionText
-  exit 0
+  return
 }
 
 Write-Step "config"
@@ -658,6 +606,7 @@ Write-Step "eggai-done"
 Write-Host $versionText
 Write-Host "Config: $configFile"
 Write-Host "Environment: EGGAI_API_KEY ($environmentTarget scope)"
+Write-Host "Restart the Codex desktop app to load the updated user environment and configuration."
 if ($configUpdate.BackupFile) {
   Write-Host "Backup: $($configUpdate.BackupFile)"
 } elseif ($configUpdate.Existed -and -not $configUpdate.Changed) {

@@ -21,8 +21,8 @@ test("an anonymous Reader gets a provider-neutral install command by default", a
   );
   await panel.getByRole("button", { name: "复制安装命令" }).click();
   await expect(panel.getByRole("button", { name: "安装命令已复制" })).toBeVisible();
-  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toBe(
-    "curl -fsSL 'https://eggdoc.pages.dev/install/codex.sh' | sh",
+  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
+    "'https://doc.eggai.icu/install/codex.sh'",
   );
 
   await panel.getByRole("tab", { name: "EggAi 配置" }).click();
