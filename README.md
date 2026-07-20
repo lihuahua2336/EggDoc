@@ -133,7 +133,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 | 变量 | 可见性 | 用途 |
 | --- | --- | --- |
 | `EGGDOC_SITE_URL` | 服务端及构建期 | 对外 HTTPS Origin，用于 canonical URL、OIDC 回调和安全 Cookie |
-| `EGGDOC_IMAGE` | Compose | VPS 拉取的公开 GHCR 镜像，例如 `ghcr.io/owner/eggdoc:1.0` |
+| `EGGDOC_IMAGE` | Compose | VPS 拉取的公开 GHCR 镜像，例如 `ghcr.io/owner/eggdoc:1.1` |
 | `EGGDOC_OIDC_ISSUER` | 服务端 | Logto OIDC Issuer URL |
 | `EGGDOC_OIDC_CLIENT_ID` | 服务端 | EggDoc 专用 OIDC Client ID |
 | `EGGDOC_OIDC_CLIENT_SECRET` | 服务端，可选 | Confidential Client 的密钥 |
@@ -322,7 +322,7 @@ OIDC Client Secret、EggDoc Session Secret 和 EggAi 服务端配置不进入 Gi
 VPS 首次部署时克隆公开仓库、创建 `.env` 并填写生产值，其中镜像地址使用：
 
 ```dotenv
-EGGDOC_IMAGE=ghcr.io/lihuahua2336/eggdoc:1.0
+EGGDOC_IMAGE=ghcr.io/lihuahua2336/eggdoc:1.1
 ```
 
 以后部署或升级只需运行：
