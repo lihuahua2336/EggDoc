@@ -133,7 +133,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 | 变量 | 可见性 | 用途 |
 | --- | --- | --- |
 | `EGGDOC_SITE_URL` | 服务端及构建期 | 对外 HTTPS Origin，用于 canonical URL、OIDC 回调和安全 Cookie |
-| `EGGDOC_IMAGE` | Compose | VPS 拉取的公开 GHCR 镜像，例如 `ghcr.io/owner/eggdoc:1.1` |
+| `EGGDOC_IMAGE` | Compose | VPS 拉取的公开 GHCR 镜像，例如 `ghcr.io/owner/eggdoc:1.3` |
 | `EGGDOC_OIDC_ISSUER` | 服务端 | Logto OIDC Issuer URL |
 | `EGGDOC_OIDC_CLIENT_ID` | 服务端 | EggDoc 专用 OIDC Client ID |
 | `EGGDOC_OIDC_CLIENT_SECRET` | 服务端，可选 | Confidential Client 的密钥 |
@@ -242,8 +242,8 @@ npm run env:container -- --force
 部署前检查 `.env` 中以下两个值都使用真实 HTTPS 域名且 Origin 一致：
 
 ```dotenv
-EGGDOC_SITE_URL=https://docs.example.com
-PUBLIC_INSTALLER_ORIGIN=https://docs.example.com
+EGGDOC_SITE_URL=https://doc.eggai.icu
+PUBLIC_INSTALLER_ORIGIN=https://doc.eggai.icu
 ```
 
 `EGGDOC_SITE_URL` 不能包含路径、查询参数或片段。真实 `.env` 不得提交、复制进镜像或发送到日志。

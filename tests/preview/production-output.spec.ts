@@ -109,7 +109,7 @@ test("every published page is anonymous, prerendered, and included in the sitema
     return [...document.querySelectorAll("loc")].map((node) => node.textContent);
   }, await sitemapResponse.text());
   expect(sitemapUrls.sort()).toEqual(
-    expectedRoutes.map((route) => new URL(route, "https://eggdoc.pages.dev").href).sort(),
+    expectedRoutes.map((route) => new URL(route, "https://doc.eggai.icu").href).sort(),
   );
 
   const builtTutorial = await readFile(

@@ -7,7 +7,7 @@ RUN npm ci
 
 COPY . .
 
-ARG EGGDOC_SITE_URL=https://eggdoc.pages.dev
+ARG EGGDOC_SITE_URL=https://doc.eggai.icu
 ARG PUBLIC_EGGAI_BASE_URL=https://api.eggai.icu/v1
 ARG PUBLIC_INSTALLER_ORIGIN=https://doc.eggai.icu
 

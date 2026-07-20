@@ -61,7 +61,7 @@ export default defineConfig({
       }),
     },
   },
-  site: process.env.EGGDOC_SITE_URL ?? "https://eggdoc.pages.dev",
+  site: process.env.EGGDOC_SITE_URL ?? "https://doc.eggai.icu",
   integrations: [mdx(), react(), sitemap()],
   security: {
     checkOrigin: deployTarget !== "node",
