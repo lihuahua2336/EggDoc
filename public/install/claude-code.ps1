@@ -222,6 +222,38 @@ function Add-NpmGlobalBinToPath {
   return $globalPrefix
 }
 
+function Remove-ConflictingClaudePowerShellShim {
+  param([string]$NpmGlobalPrefix)
+
+  $claudeCmd = Join-Path $NpmGlobalPrefix "claude.cmd"
+  $claudePowerShell = Join-Path $NpmGlobalPrefix "claude.ps1"
+  if ((Test-Path -LiteralPath $claudeCmd -PathType Leaf) -and (Test-Path -LiteralPath $claudePowerShell -PathType Leaf)) {
+    try {
+      Remove-Item -LiteralPath $claudePowerShell -Force
+    } catch {
+      Throw-InstallError "could not remove the npm claude.ps1 shim that conflicts with the current PowerShell execution policy: $($_.Exception.Message)"
+    }
+  }
+}
+
+function Get-ClaudeExecutable {
+  param([string]$NpmGlobalPrefix)
+
+  foreach ($candidateName in @("claude.cmd", "claude.exe")) {
+    $candidate = Join-Path $NpmGlobalPrefix $candidateName
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+      return $candidate
+    }
+  }
+  foreach ($candidateName in @("claude.cmd", "claude.exe")) {
+    $candidate = Get-Command $candidateName -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($candidate) {
+      return $candidate.Source
+    }
+  }
+  return $null
+}
+
 function Publish-EnvironmentChange {
   if ($PathEnvironmentScope -ne "User") { return }
   try {
@@ -500,17 +532,8 @@ try {
 }
 
 $npmGlobalPrefix = Add-NpmGlobalBinToPath -NpmCommand $nodeRuntime.NpmCommand
-$claudeCommand = Get-Command claude -ErrorAction SilentlyContinue
-$claudeExecutable = if ($claudeCommand) { $claudeCommand.Source } else { $null }
-if (-not $claudeCommand) {
-  foreach ($candidateName in @("claude.cmd", "claude.exe")) {
-    $candidate = Join-Path $npmGlobalPrefix $candidateName
-    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-      $claudeExecutable = $candidate
-      break
-    }
-  }
-}
+Remove-ConflictingClaudePowerShellShim -NpmGlobalPrefix $npmGlobalPrefix
+$claudeExecutable = Get-ClaudeExecutable -NpmGlobalPrefix $npmGlobalPrefix
 if (-not $claudeExecutable) {
   Throw-InstallError "Claude Code was installed, but claude is not on PATH. Restart PowerShell and run claude --version."
 }

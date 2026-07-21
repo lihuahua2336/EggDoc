@@ -21,7 +21,11 @@ const powershell = path.join(
 const repoRoot = path.resolve(import.meta.dirname, "../..");
 const scriptPath = path.join(repoRoot, "public/install/claude-code.ps1");
 
-function runPowerShell(args: string[], extraEnv: NodeJS.ProcessEnv = {}) {
+function runPowerShell(
+  args: string[],
+  extraEnv: NodeJS.ProcessEnv = {},
+  executionPolicy = "Bypass",
+) {
   return spawnSync(
     powershell,
     [
@@ -31,7 +35,7 @@ function runPowerShell(args: string[], extraEnv: NodeJS.ProcessEnv = {}) {
       "-OutputFormat",
       "Text",
       "-ExecutionPolicy",
-      "Bypass",
+      executionPolicy,
       ...args,
     ],
     {
@@ -58,7 +62,13 @@ function runWithInstallerFixture(
   wrapperArguments = "",
   initialSettings?: string,
   extraEnv: NodeJS.ProcessEnv = {},
-  options: { runs?: number; lockSettings?: boolean; removeBackupAfterFirstRun?: boolean } = {},
+  options: {
+    executionPolicy?: "Bypass" | "Restricted";
+    verifyBareClaudeCommand?: boolean;
+    runs?: number;
+    lockSettings?: boolean;
+    removeBackupAfterFirstRun?: boolean;
+  } = {},
 ) {
   const root = mkdtempSync(path.join(tmpdir(), "eggdoc-claude-powershell-"));
   const bin = path.join(root, "bin");
@@ -140,7 +150,8 @@ function runWithInstallerFixture(
     "  $settingsLock = [IO.File]::Open($env:EGGDOC_SETTINGS_PATH, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)",
     "}",
     "try {",
-    `  & $env:EGGDOC_CLAUDE_WRAPPER ${wrapperArguments}`,
+    `  & ([scriptblock]::Create([IO.File]::ReadAllText($env:EGGDOC_CLAUDE_WRAPPER))) ${wrapperArguments}`,
+    "  if ($env:EGGDOC_VERIFY_BARE_CLAUDE) { Write-Output \"ExecutionPolicy=$(Get-ExecutionPolicy)\"; & claude --version }",
     "} finally {",
     "  $registryState = if (Test-Path Env:NPM_CONFIG_REGISTRY) { 'exists:' + $env:NPM_CONFIG_REGISTRY } else { 'missing' }",
     "  [IO.File]::WriteAllText($env:EGGDOC_NPM_REGISTRY_STATE_LOG, $registryState)",
@@ -164,6 +175,7 @@ function runWithInstallerFixture(
           EGGDOC_NODE_INSTALL_DIR: path.join(root, "program-files", "nodejs"),
           EGGDOC_NPM_REGISTRY_STATE_LOG: registryStateLog,
           EGGDOC_SETTINGS_PATH: path.join(home, ".claude", "settings.json"),
+          EGGDOC_VERIFY_BARE_CLAUDE: options.verifyBareClaudeCommand ? "1" : undefined,
           FAKE_NODE_AVAILABLE: "1",
           FAKE_NODE_VERSION: "24.18.0",
           HOME: home,
@@ -174,6 +186,7 @@ function runWithInstallerFixture(
           USERPROFILE: home,
           ...extraEnv,
         },
+        options.executionPolicy ?? "Bypass",
       ),
     );
     const snapshotSettingsPath = path.join(home, ".claude", "settings.json");
@@ -410,6 +423,25 @@ Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBi
   expect(installed.settings).toBeUndefined();
   expect(installed.wingetCommands).toBe("");
   expect(installed.remainingTemporaryFiles).toEqual([]);
+});
+
+test("Claude Code PowerShell works with npm shims under a restricted execution policy", () => {
+  const installed = runWithInstallerFixture(`
+$claudeBin = Join-Path $env:USERPROFILE ".local\\bin"
+New-Item -ItemType Directory -Force -Path $claudeBin | Out-Null
+$quote = [char]34
+$claudeCmd = "@echo off" + [Environment]::NewLine + $quote + $env:EGGDOC_NODE_BINARY + $quote + " --version" + [Environment]::NewLine
+[IO.File]::WriteAllText((Join-Path $claudeBin "claude.cmd"), $claudeCmd)
+[IO.File]::WriteAllText((Join-Path $claudeBin "claude.ps1"), "Write-Output 'npm PowerShell shim'" + [Environment]::NewLine)
+`, false, "", undefined, {}, {
+    executionPolicy: "Restricted",
+    verifyBareClaudeCommand: true,
+  });
+
+  expect(installed.result.status, installed.result.stderr).toBe(0);
+  expect(installed.result.stdout).toContain("Done: Claude Code is installed");
+  expect(installed.result.stdout).toContain("ExecutionPolicy=Restricted");
+  expect(installed.result.stdout).toContain(process.version);
 });
 
 test("Claude Code PowerShell automatically installs missing or outdated Node.js with exact winget identity", () => {
