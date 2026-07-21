@@ -78,28 +78,48 @@ test("Claude Code assigns the preferred EggAi model for each model role", () => 
   ).toEqual({
     fable: "claude-fable-5",
     haiku: "claude-haiku-4-5",
-    main: "claude-sonnet-5",
+    main: "claude-fable-5",
     opus: "claude-opus-4-8",
     sonnet: "claude-sonnet-5",
   });
 });
 
-test("Claude Code uses the highest available family versions and rejects a list without Claude", () => {
+test("Claude Code uses only explicitly supported EggAi model identifiers", () => {
   expect(
     selectClaudeCodeModels([
-      "anthropic/claude-haiku-4-5",
-      "anthropic/claude-opus-4-1",
-      "anthropic/claude-opus-4-7",
-      "anthropic/claude-sonnet-4-5",
+      "claude-haiku-4-5",
+      "claude-opus-4-6",
+      "claude-opus-4-7",
+      "claude-sonnet-4-6",
     ]),
   ).toEqual({
-    fable: "anthropic/claude-sonnet-4-5",
-    haiku: "anthropic/claude-haiku-4-5",
-    main: "anthropic/claude-sonnet-4-5",
-    opus: "anthropic/claude-opus-4-7",
-    sonnet: "anthropic/claude-sonnet-4-5",
+    fable: "claude-sonnet-4-6",
+    haiku: "claude-haiku-4-5",
+    main: "claude-opus-4-7",
+    opus: "claude-opus-4-7",
+    sonnet: "claude-sonnet-4-6",
   });
-  expect(selectClaudeCodeModels(["gpt-5.2", "gemini-3-pro"])).toBeUndefined();
+  expect(
+    selectClaudeCodeModels([
+      "claude-sonnet-4-8",
+      "claude-haiku-5",
+      "anthropic/claude-opus-4-8",
+      "gpt-5.2",
+    ]),
+  ).toBeUndefined();
+});
+
+test("Claude Code applies the EggAi main model priority in order", () => {
+  expect(selectClaudeCodeModels(["claude-sonnet-5", "claude-opus-4-8"])?.main).toBe(
+    "claude-sonnet-5",
+  );
+  expect(selectClaudeCodeModels(["claude-sonnet-4-6", "claude-opus-4-6"])?.main).toBe(
+    "claude-opus-4-6",
+  );
+  expect(selectClaudeCodeModels(["claude-sonnet-4-6", "claude-haiku-4-5"])?.main).toBe(
+    "claude-sonnet-4-6",
+  );
+  expect(selectClaudeCodeModels(["claude-haiku-4-5"])?.main).toBe("claude-haiku-4-5");
 });
 
 test("Claude Code removes the OpenAI v1 suffix before appending Anthropic endpoints", () => {

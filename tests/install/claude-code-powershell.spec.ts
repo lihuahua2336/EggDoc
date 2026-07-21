@@ -302,6 +302,21 @@ test("Claude Code PowerShell EggAi dry-run validates inputs and redacts the cred
   expect(unsafeUrl.status).not.toBe(0);
   expect(missingKey.status).not.toBe(0);
 
+  const unsupportedModel = runPowerShell([
+    "-File",
+    scriptPath,
+    "-DryRun",
+    "-EggAi",
+    "-SkKey",
+    "secret",
+    "-BaseUrl",
+    "https://api.example.test/v1",
+    "-Model",
+    "claude-sonnet-4-8",
+  ]);
+  expect(unsupportedModel.status).not.toBe(0);
+  expect(unsupportedModel.stderr).toContain("is not a supported EggAi Claude model");
+
   for (const invalidBaseUrl of [
     "https://reader:secret@api.example.test/v1",
     "https://api.example.test/v1?models=1",
@@ -498,7 +513,7 @@ test("Claude Code PowerShell EggAi mode is idempotent and does not recreate a re
   const configured = runWithInstallerFixture(
     "# Keep the preinstalled Claude fixture.\n",
     true,
-    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-IDEMPOTENT' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-5'",
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-IDEMPOTENT' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-6'",
     initialSettings,
     {},
     { runs: 2, removeBackupAfterFirstRun: true },
@@ -516,7 +531,7 @@ test("Claude Code PowerShell leaves the original settings intact when atomic rep
   const configured = runWithInstallerFixture(
     "# Keep the preinstalled Claude fixture.\n",
     true,
-    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-LOCKED' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-5'",
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-LOCKED' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-6'",
     initialSettings,
     {},
     { lockSettings: true },
@@ -533,7 +548,7 @@ test("Claude Code PowerShell EggAi mode leaves malformed existing settings untou
   const configured = runWithInstallerFixture(
     "# Keep the preinstalled Claude fixture.\n",
     true,
-    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-CONFIG' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-5'",
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-CONFIG' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-6'",
     malformedSettings,
   );
 
@@ -547,7 +562,7 @@ test("Claude Code PowerShell EggAi mode stops before installation when the gatew
   const configured = runWithInstallerFixture(
     "# Keep the preinstalled Claude fixture.\n",
     true,
-    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-CONFIG' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-5'",
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-CONFIG' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-6'",
     undefined,
     { FAKE_GATEWAY_STATUS: "401" },
   );
@@ -562,7 +577,7 @@ test("Claude Code PowerShell EggAi mode rejects a non-Anthropic success response
   const configured = runWithInstallerFixture(
     "# Keep the preinstalled Claude fixture.\n",
     true,
-    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-CONFIG' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-5'",
+    "-EggAi -SkKey 'sk-EGGDOC-POWERSHELL-CONFIG' -BaseUrl 'https://api.example.test/v1' -Model 'claude-sonnet-4-6'",
     undefined,
     {
       FAKE_GATEWAY_BODY:

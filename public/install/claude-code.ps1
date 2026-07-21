@@ -19,6 +19,15 @@ $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY } else {
 $NpmPackage = "@anthropic-ai/claude-code"
 $NodeMinimumMajor = 22
 $NodeWingetPackageId = "OpenJS.NodeJS.LTS"
+$SupportedEggAiModels = @(
+  "claude-opus-4-6",
+  "claude-opus-4-7",
+  "claude-opus-4-8",
+  "claude-sonnet-4-6",
+  "claude-sonnet-5",
+  "claude-fable-5",
+  "claude-haiku-4-5"
+)
 $PathEnvironmentScope = if ($env:EGGDOC_CLAUDE_PATH_SCOPE) { $env:EGGDOC_CLAUDE_PATH_SCOPE } else { "User" }
 $OfficialNodeDirectory = if ($env:EGGDOC_NODE_INSTALL_DIR) {
   $env:EGGDOC_NODE_INSTALL_DIR
@@ -362,6 +371,9 @@ if ($EggAiMode) {
   foreach ($configuredModel in @($Model, $OpusModel, $SonnetModel, $HaikuModel, $FableModel)) {
     if ([string]::IsNullOrWhiteSpace($configuredModel) -or $configuredModel -notmatch "^[A-Za-z0-9._:/-]+$") {
       Throw-InstallError "model contains unsupported characters."
+    }
+    if ($SupportedEggAiModels -cnotcontains $configuredModel) {
+      Throw-InstallError "model '$configuredModel' is not a supported EggAi Claude model."
     }
   }
 }

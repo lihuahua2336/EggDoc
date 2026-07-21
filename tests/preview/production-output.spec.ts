@@ -76,14 +76,16 @@ test("the production build serves Pagefind search and the sitemap", async ({ pag
   expect(sitemap.status()).toBe(200);
   expect(await sitemap.text()).toContain("sitemap-0.xml");
   expect(claudeShellInstaller.status()).toBe(200);
-  expect(await claudeShellInstaller.text()).toContain("https://claude.ai/install.sh");
+  expect(await claudeShellInstaller.text()).toContain("@anthropic-ai/claude-code");
+  expect(await claudeShellInstaller.text()).toContain("https://registry.npmmirror.com");
   expect(claudePowerShellInstaller.status()).toBe(200);
-  expect(await claudePowerShellInstaller.text()).toContain("https://claude.ai/install.ps1");
+  expect(await claudePowerShellInstaller.text()).toContain("@anthropic-ai/claude-code");
+  expect(await claudePowerShellInstaller.text()).toContain("https://registry.npmmirror.com");
 
   await page.goto("/search/");
   const searchInput = page.getByLabel("关键词");
   await expect(searchInput).toBeEnabled();
-  await searchInput.fill("EGGDOC");
+  await searchInput.fill("Codex 安装");
   await expect(page.getByRole("heading", { name: "Codex 安装" })).toBeVisible();
 });
 

@@ -10,4 +10,6 @@ The public installer origin defaults to `https://doc.eggai.icu`, which hosts onl
 
 The container is stateless and requires no application volume because EggDoc keeps its encrypted session in the Reader's cookie and does not persist EggAi API Credentials. Every replica must use the same `EGGDOC_SESSION_SECRET`; rotating it invalidates existing EggDoc Sessions.
 
+Publishing a GitHub Release is the automatic production image trigger. The release workflow scans committed history for secrets and runs the complete test and production-build suite before it builds and pushes `linux/amd64` and `linux/arm64` images to `ghcr.io/lihuahua2336/eggdoc`. Stable releases publish the full semantic version, major/minor, major, commit SHA, and `latest` tags; prereleases do not move `latest`. Manual workflow runs publish only `manual` and commit SHA tags so they cannot replace the production channel accidentally.
+
 This decision supersedes ADR 0024 only where it names Cloudflare as the first runtime target. ADR 0024's prerendered-content boundary, portable web API requirement, future adapter portability, and no-database decision remain in force.

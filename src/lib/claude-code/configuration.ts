@@ -86,12 +86,20 @@ export type ClaudeCodeModels = {
   sonnet: string;
 };
 
+const supportedClaudeModels = {
+  fable: ["claude-fable-5"],
+  haiku: ["claude-haiku-4-5"],
+  opus: ["claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6"],
+  sonnet: ["claude-sonnet-5", "claude-sonnet-4-6"],
+} as const;
+
 export function selectClaudeCodeModels(modelNames: string[]): ClaudeCodeModels | undefined {
-  const sonnet = selectFamilyModel(modelNames, "sonnet", ["claude-sonnet-5"]);
-  const opus = selectFamilyModel(modelNames, "opus", ["claude-opus-4-8"]);
-  const fable = selectFamilyModel(modelNames, "fable", ["claude-fable-5"]);
-  const haiku = selectFamilyModel(modelNames, "haiku", ["claude-haiku-4-5"]);
-  const main = sonnet ?? opus ?? fable ?? haiku;
+  const sonnet = selectSupportedModel(modelNames, supportedClaudeModels.sonnet);
+  const sonnet5 = selectSupportedModel(modelNames, ["claude-sonnet-5"]);
+  const opus = selectSupportedModel(modelNames, supportedClaudeModels.opus);
+  const fable = selectSupportedModel(modelNames, supportedClaudeModels.fable);
+  const haiku = selectSupportedModel(modelNames, supportedClaudeModels.haiku);
+  const main = fable ?? sonnet5 ?? opus ?? sonnet ?? haiku;
   if (!main) return undefined;
 
   return {
@@ -103,29 +111,10 @@ export function selectClaudeCodeModels(modelNames: string[]): ClaudeCodeModels |
   };
 }
 
-function selectFamilyModel(modelNames: string[], family: string, preferred: string[] = []) {
-  const familyPrefix = `claude-${family}`;
-  const candidates = modelNames.filter((name) => {
-    const basename = name.toLowerCase().split("/").at(-1) ?? "";
-    return basename === familyPrefix || basename.startsWith(`${familyPrefix}-`);
-  });
-  for (const preferredName of preferred) {
-    const match = candidates.find(
-      (name) => (name.toLowerCase().split("/").at(-1) ?? "") === preferredName,
-    );
+function selectSupportedModel(modelNames: string[], priority: readonly string[]) {
+  for (const supportedName of priority) {
+    const match = modelNames.find((name) => name.toLowerCase() === supportedName);
     if (match) return match;
   }
-  return candidates.sort((left, right) => compareModelVersions(right, left, family))[0];
-}
-
-function compareModelVersions(left: string, right: string, family: string) {
-  const versionPattern = new RegExp(`claude-${family}-(\\d+(?:[-.]\\d+)*)`, "i");
-  const leftParts = left.match(versionPattern)?.[1].split(/[-.]/).map(Number) ?? [];
-  const rightParts = right.match(versionPattern)?.[1].split(/[-.]/).map(Number) ?? [];
-  const length = Math.max(leftParts.length, rightParts.length);
-  for (let index = 0; index < length; index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-    if (difference !== 0) return difference;
-  }
-  return left.localeCompare(right);
+  return undefined;
 }

@@ -301,6 +301,10 @@ if [ "$EGGAI_MODE" = "1" ]; then
     case "$configured_model" in
       *[!A-Za-z0-9._:/-]*) fail "model contains unsupported characters." ;;
     esac
+    case "$configured_model" in
+      claude-opus-4-6|claude-opus-4-7|claude-opus-4-8|claude-sonnet-4-6|claude-sonnet-5|claude-fable-5|claude-haiku-4-5) ;;
+      *) fail "model '$configured_model' is not a supported EggAi Claude model." ;;
+    esac
   done
   case "$BASE_URL" in
     https://?*) ;;

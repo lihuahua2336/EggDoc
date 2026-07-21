@@ -248,6 +248,18 @@ test("Claude Code Shell EggAi dry-run validates inputs and redacts the credentia
 
   expect(runShell(["--eggai", "--sk-key", "secret", "--baseurl", "http://unsafe.test"]).status).not.toBe(0);
   expect(runShell(["--eggai", "--sk-key", "secret", "--baseurl", "https:///v1"]).status).not.toBe(0);
+  const unsupportedModel = runShell([
+    "--dry-run",
+    "--eggai",
+    "--sk-key",
+    "secret",
+    "--baseurl",
+    "https://api.example.test/v1",
+    "--model",
+    "claude-sonnet-4-8",
+  ]);
+  expect(unsupportedModel.status).not.toBe(0);
+  expect(unsupportedModel.stderr).toContain("is not a supported EggAi Claude model");
   expect(
     runShell([
       "--dry-run",
@@ -255,7 +267,7 @@ test("Claude Code Shell EggAi dry-run validates inputs and redacts the credentia
       "--sk-key",
       "secret",
       "--model",
-      "claude-sonnet-4-5",
+      "claude-sonnet-4-6",
       "--baseurl",
       "https://reader:secret@api.example.test/v1",
     ]).stderr,
@@ -267,7 +279,7 @@ test("Claude Code Shell EggAi dry-run validates inputs and redacts the credentia
       "--sk-key",
       "secret",
       "--model",
-      "claude-sonnet-4-5",
+      "claude-sonnet-4-6",
       "--baseurl",
       "https://api.example.test/v1?models=1",
     ]).stderr,
@@ -279,7 +291,7 @@ test("Claude Code Shell EggAi dry-run validates inputs and redacts the credentia
       "--sk-key",
       "secret",
       "--model",
-      "claude-sonnet-4-5",
+      "claude-sonnet-4-6",
       "--baseurl",
       "https://api.example.test/v1#models",
     ]).stderr,
@@ -416,7 +428,7 @@ test("Claude Code Shell EggAi mode is idempotent and does not recreate a removed
       "--baseurl",
       "https://api.example.test/v1",
       "--model",
-      "claude-sonnet-4-5",
+      "claude-sonnet-4-6",
     ],
     initialSettings,
     {},
@@ -442,7 +454,7 @@ test("Claude Code Shell EggAi mode leaves malformed existing settings untouched"
       "--baseurl",
       "https://api.example.test/v1",
       "--model",
-      "claude-sonnet-4-5",
+      "claude-sonnet-4-6",
     ],
     malformedSettings,
   );
@@ -464,7 +476,7 @@ test("Claude Code Shell EggAi mode stops before installation when the gateway re
       "--baseurl",
       "https://api.example.test/v1",
       "--model",
-      "claude-sonnet-4-5",
+      "claude-sonnet-4-6",
     ],
     undefined,
     { FAKE_GATEWAY_STATUS: "401" },
@@ -487,7 +499,7 @@ test("Claude Code Shell EggAi mode rejects a non-Anthropic success response", ()
       "--baseurl",
       "https://api.example.test/v1",
       "--model",
-      "claude-sonnet-4-5",
+      "claude-sonnet-4-6",
     ],
     undefined,
     {
@@ -527,7 +539,7 @@ for (const jsonEngine of ["node", "python3", "jq", "perl"] as const) {
         "--baseurl",
         "https://api.example.test/v1",
         "--model",
-        "claude-sonnet-4-5",
+        "claude-sonnet-4-6",
       ],
       undefined,
       { EGGDOC_JSON_ENGINE: jsonEngine },
@@ -536,6 +548,6 @@ for (const jsonEngine of ["node", "python3", "jq", "perl"] as const) {
     expect(configured.result.status, configured.result.stderr).toBe(0);
     const settings = JSON.parse(configured.settings ?? "");
     expect(settings.env.ANTHROPIC_BASE_URL).toBe("https://api.example.test");
-    expect(settings.env.ANTHROPIC_MODEL).toBe("claude-sonnet-4-5");
+    expect(settings.env.ANTHROPIC_MODEL).toBe("claude-sonnet-4-6");
   });
 }
