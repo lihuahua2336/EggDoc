@@ -13,8 +13,11 @@ EGGAI_MODE=0
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
 NPM_PREFIX="$HOME/.local"
 NPM_PACKAGE="@openai/codex"
-NODE_MINIMUM_MAJOR=16
-NODE_RELEASE_LINE=22
+NODE_MINIMUM_VERSION=24.18.0
+NODE_MINIMUM_MAJOR=24
+NODE_MINIMUM_MINOR=18
+NODE_MINIMUM_PATCH=0
+NODE_RELEASE_LINE=24
 NODE_RELEASE_URL="https://nodejs.org/dist/latest-v${NODE_RELEASE_LINE}.x"
 NODE_INSTALL_ROOT="$HOME/.local/share/eggdoc-node"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
@@ -262,11 +265,22 @@ download_node_file() {
 node_runtime_is_usable() {
   command -v node >/dev/null 2>&1 || return 1
   command -v npm >/dev/null 2>&1 || return 1
-  node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)"
-  case "$node_major" in
-    ''|*[!0-9]*) return 1 ;;
+  node_version="$(node --version 2>/dev/null || true)"
+  node_version="${node_version#v}"
+  node_major="${node_version%%.*}"
+  node_remainder="${node_version#*.}"
+  [ "$node_remainder" != "$node_version" ] || return 1
+  node_minor="${node_remainder%%.*}"
+  node_patch="${node_remainder#*.}"
+  [ "$node_patch" != "$node_remainder" ] || return 1
+  case "$node_major:$node_minor:$node_patch" in
+    :*|*::*|*:|*[!0-9:]*) return 1 ;;
   esac
-  [ "$node_major" -ge "$NODE_MINIMUM_MAJOR" ]
+  [ "$node_major" -gt "$NODE_MINIMUM_MAJOR" ] && return 0
+  [ "$node_major" -lt "$NODE_MINIMUM_MAJOR" ] && return 1
+  [ "$node_minor" -gt "$NODE_MINIMUM_MINOR" ] && return 0
+  [ "$node_minor" -lt "$NODE_MINIMUM_MINOR" ] && return 1
+  [ "$node_patch" -ge "$NODE_MINIMUM_PATCH" ]
 }
 
 node_archive_digest() {
@@ -375,13 +389,13 @@ ensure_node_runtime() {
     install_node_runtime || fail "automatic Node.js installation failed."
   fi
   activate_command_path
-  node_runtime_is_usable || fail "Node.js $NODE_MINIMUM_MAJOR or newer and npm are required, but verification failed after installation."
+  node_runtime_is_usable || fail "Node.js $NODE_MINIMUM_VERSION or newer and npm are required, but verification failed after installation."
 }
 
 print_plan() {
   echo "Codex installer dry run"
   echo "Mode: $([ "$EGGAI_MODE" = "1" ] && echo eggai || echo default)"
-  echo "Node.js requirement: >=$NODE_MINIMUM_MAJOR"
+  echo "Node.js requirement: >=$NODE_MINIMUM_VERSION"
   echo "Node.js automatic install source: $NODE_RELEASE_URL"
   echo "npm package: $NPM_PACKAGE@latest"
   echo "npm registry: $NPM_REGISTRY"

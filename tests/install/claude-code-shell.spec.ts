@@ -113,8 +113,7 @@ cat "$FAKE_INSTALLER_SOURCE" > "$output"
     fakeNode,
     `#!/bin/sh
 case "\${1:-}" in
-  -p) printf '%s\n' "\${FAKE_NODE_MAJOR:-22}" ;;
-  --version) printf 'v%s.0.0\n' "\${FAKE_NODE_MAJOR:-22}" ;;
+  --version) printf 'v%s\n' "\${FAKE_NODE_VERSION:-24.18.0}" ;;
   *) exec "$REAL_NODE_COMMAND" "$@" ;;
 esac
 `,
@@ -200,8 +199,8 @@ test("Claude Code Shell dry-run delegates installation without changing configur
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
   expect(result.stdout).toContain("Claude Code installer dry run");
-  expect(result.stdout).toContain("Node.js requirement: >=22");
-  expect(result.stdout).toContain("Node.js automatic install source: https://nodejs.org/dist/latest-v22.x");
+  expect(result.stdout).toContain("Node.js requirement: >=24.18.0");
+  expect(result.stdout).toContain("Node.js automatic install source: https://nodejs.org/dist/latest-v24.x");
   expect(result.stdout).toContain("npm package: @anthropic-ai/claude-code@latest");
   expect(result.stdout).toContain("npm registry: https://registry.npmmirror.com");
   expect(result.stdout).toContain("Would install/update Claude Code: yes");
@@ -340,6 +339,16 @@ chmod +x "$HOME/.local/bin/claude"
   expect(installed.result.stdout).toContain("9.9.9 (Claude Code test fixture)");
   expect(installed.settings).toBeUndefined();
   expect(installed.remainingTemporaryFiles).toEqual([]);
+});
+
+test("Claude Code Shell upgrades Node.js versions below 24.18.0", () => {
+  const outdated = runWithInstallerFixture("#!/bin/sh\nexit 0\n", false, [], undefined, {
+    FAKE_NODE_VERSION: "24.17.9",
+  });
+
+  expect(outdated.result.status).not.toBe(0);
+  expect(outdated.result.stdout).toContain("Installing Node.js 24.x from nodejs.org");
+  expect(outdated.npmCommands).toBe("");
 });
 
 test("Claude Code uses the official npm package through the mainland registry", () => {

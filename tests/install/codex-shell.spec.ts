@@ -98,13 +98,13 @@ function runWithInstallerFixture(
   let nodeChecksums: string | undefined;
   let nodeArchive: string | undefined;
   if (options.automaticNode) {
-    const releaseName = "node-v22.99.0-linux-x64";
+    const releaseName = "node-v24.18.0-linux-x64";
     const releaseParent = path.join(root, "node-release");
     const releaseBin = path.join(releaseParent, releaseName, "bin");
     mkdirSync(releaseBin, { recursive: true });
     const nodeRuntime = path.join(releaseBin, "node");
     const npmRuntime = path.join(releaseBin, "npm");
-    writeFileSync(nodeRuntime, "#!/bin/sh\ncase \"$1\" in -p) echo 22 ;; --version) echo v22.99.0 ;; *) exit 64 ;; esac\n");
+    writeFileSync(nodeRuntime, "#!/bin/sh\ncase \"$1\" in --version) echo v24.18.0 ;; *) exit 64 ;; esac\n");
     writeFileSync(npmRuntime, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FAKE_NPM_LOG\"\nsh \"$FAKE_INSTALLER_SOURCE\"\n");
     chmodSync(nodeRuntime, 0o755);
     chmodSync(npmRuntime, 0o755);
@@ -177,8 +177,7 @@ esac
     fakeNode,
     `#!/bin/sh
 case "\${1:-}" in
-  -p) printf '%s\n' "\${FAKE_NODE_MAJOR:-22}" ;;
-  --version) printf 'v%s.0.0\n' "\${FAKE_NODE_MAJOR:-22}" ;;
+  --version) printf 'v%s\n' "\${FAKE_NODE_VERSION:-24.18.0}" ;;
   *) exit 64 ;;
 esac
 `,
@@ -236,7 +235,7 @@ exit "$status"
           FAKE_NPM_LOG: shellPath(npmLog),
           FAKE_NODE_ARCHIVE: nodeArchive ? shellPath(nodeArchive) : undefined,
           FAKE_NODE_CHECKSUMS: nodeChecksums ? shellPath(nodeChecksums) : undefined,
-          FAKE_NODE_MAJOR: options.automaticNode ? "15" : "22",
+          FAKE_NODE_VERSION: options.automaticNode ? "24.17.9" : "24.18.0",
           FAKE_SIGNAL_CONFIG_PATH: options.signalAfterConfigWrite
             ? shellPath(configPath)
             : undefined,
@@ -326,7 +325,7 @@ test("default installation verifies official Node.js before npm when Node is too
   const installed = runWithInstallerFixture(successfulInstaller, { automaticNode: true });
 
   expect(installed.result.status, installed.result.stderr).toBe(0);
-  expect(installed.result.stdout).toContain("Installing Node.js 22.x from nodejs.org");
+  expect(installed.result.stdout).toContain("Installing Node.js 24.x from nodejs.org");
   expect(installed.result.stdout).toContain("Done: Codex is installed");
   expect(installed.npmCommands).toContain("install --global @openai/codex@latest");
   expect(installed.profile).toContain(".local/share/eggdoc-node/current/bin");
@@ -548,8 +547,8 @@ test("default dry-run installs Codex without changing provider configuration", (
 
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Mode: default");
-  expect(result.stdout).toContain("Node.js requirement: >=16");
-  expect(result.stdout).toContain("Node.js automatic install source: https://nodejs.org/dist/latest-v22.x");
+  expect(result.stdout).toContain("Node.js requirement: >=24.18.0");
+  expect(result.stdout).toContain("Node.js automatic install source: https://nodejs.org/dist/latest-v24.x");
   expect(result.stdout).toContain("npm package: @openai/codex@latest");
   expect(result.stdout).toContain("npm registry: https://registry.npmmirror.com");
   expect(result.stdout).toContain("Would install/update Codex: yes");

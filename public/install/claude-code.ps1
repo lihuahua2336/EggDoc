@@ -17,8 +17,9 @@ $ErrorActionPreference = "Stop"
 
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY } else { "https://registry.npmmirror.com" }
 $NpmPackage = "@anthropic-ai/claude-code"
-$NodeMinimumMajor = 22
+$NodeMinimumVersion = [Version]"24.18.0"
 $NodeWingetPackageId = "OpenJS.NodeJS.LTS"
+$WingetNoApplicableUpgradeExitCode = 0x8A15002B
 $SupportedEggAiModels = @(
   "claude-opus-4-6",
   "claude-opus-4-7",
@@ -95,17 +96,17 @@ function Get-NodeRuntime {
 
   try {
     $global:LASTEXITCODE = 0
-    $majorOutput = & $nodeSource -p 'process.versions.node.split(".")[0]'
-    if ($LASTEXITCODE -ne 0) { return $null }
-    $major = 0
-    if (-not [int]::TryParse(($majorOutput -join "").Trim(), [ref]$major)) { return $null }
     $versionOutput = & $nodeSource --version
     if ($LASTEXITCODE -ne 0) { return $null }
+    $version = ($versionOutput -join "").Trim()
+    $versionNumber = $null
+    if (-not [Version]::TryParse($version.TrimStart([char]'v'), [ref]$versionNumber)) { return $null }
     return [pscustomobject]@{
-      Major = $major
+      Major = $versionNumber.Major
       NodeCommand = $nodeSource
       NpmCommand = $npmSource
-      Version = ($versionOutput -join "").Trim()
+      Version = $version
+      VersionNumber = $versionNumber
     }
   } catch {
     return $null
@@ -129,7 +130,7 @@ function Update-ProcessPath {
 function Install-NodeRuntime {
   $wingetCommand = Get-Command winget -ErrorAction SilentlyContinue
   if (-not $wingetCommand) {
-    Throw-InstallError "Node.js $NodeMinimumMajor or newer is required, and winget is unavailable. Install the official Node.js LTS release and retry."
+    Throw-InstallError "Node.js $NodeMinimumVersion or newer is required, and winget is unavailable. Install the official Node.js LTS release and retry."
   }
 
   Write-Host "Installing Node.js LTS with winget..."
@@ -143,28 +144,32 @@ function Install-NodeRuntime {
     --silent `
     --disable-interactivity | ForEach-Object { Write-Host $_ }
   $wingetExitCode = $LASTEXITCODE
-  if ($wingetExitCode -ne 0) {
+  $alreadyCurrent = $wingetExitCode -eq $WingetNoApplicableUpgradeExitCode
+  if ($wingetExitCode -ne 0 -and -not $alreadyCurrent) {
     Throw-InstallError "winget could not install the official Node.js LTS package (exit code $wingetExitCode)."
+  }
+  if ($alreadyCurrent) {
+    Write-Host "Node.js LTS is already up to date according to winget."
   }
   Update-ProcessPath
 }
 
 function Ensure-NodeRuntime {
   $runtime = Get-NodeRuntime
-  if ($runtime -and $runtime.Major -ge $NodeMinimumMajor) {
+  if ($runtime -and $runtime.VersionNumber -ge $NodeMinimumVersion) {
     Write-Host "Using Node.js $($runtime.Version)."
     return $runtime
   }
 
   if ($runtime) {
-    Write-Host "Node.js $($runtime.Version) is older than the required version $NodeMinimumMajor."
+    Write-Host "Node.js $($runtime.Version) is older than the required version $NodeMinimumVersion."
   } else {
-    Write-Host "Node.js $NodeMinimumMajor or newer was not found."
+    Write-Host "Node.js $NodeMinimumVersion or newer was not found."
   }
   Install-NodeRuntime
   $runtime = Get-NodeRuntime -PreferredDirectory $OfficialNodeDirectory
-  if (-not $runtime -or $runtime.Major -lt $NodeMinimumMajor) {
-    Throw-InstallError "Node.js $NodeMinimumMajor or newer and npm.cmd are required, but verification failed after winget installation. Restart PowerShell and retry."
+  if (-not $runtime -or $runtime.VersionNumber -lt $NodeMinimumVersion) {
+    Throw-InstallError "Node.js $NodeMinimumVersion or newer and npm.cmd are required, but verification failed after winget installation. Restart PowerShell and retry."
   }
   Write-Host "Using Node.js $($runtime.Version)."
   return $runtime
@@ -385,7 +390,7 @@ $settingsFile = Join-Path $claudeHome "settings.json"
 if ($DryRun) {
   Write-Host "Claude Code installer dry run"
   Write-Host "Mode: $(if ($EggAiMode) { 'eggai' } else { 'default' })"
-  Write-Host "Node.js requirement: >=$NodeMinimumMajor"
+  Write-Host "Node.js requirement: >=$NodeMinimumVersion"
   Write-Host "Node.js automatic install: winget $NodeWingetPackageId"
   Write-Host "npm package: $NpmPackage@$Version"
   Write-Host "npm registry: $NpmRegistry"

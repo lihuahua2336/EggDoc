@@ -2,7 +2,7 @@
 
 调研日期：2026-07-17
 
-实现更新：2026-07-20。下文保留原生安装器的官方事实记录；EggDoc 当前实现已按 ADR 0033 和 ADR 0035 改为检测/安装 Node.js 22，并通过 `https://registry.npmmirror.com` 安装官方 npm 包 `@anthropic-ai/claude-code`。
+实现更新：2026-07-21。下文保留原生安装器的官方事实记录；EggDoc 当前实现已按 ADR 0033 和 ADR 0035 改为要求 Node.js 24.18.0 或更高版本，必要时安装 Node 24 LTS，并通过 `https://registry.npmmirror.com` 安装官方 npm 包 `@anthropic-ai/claude-code`。
 
 范围：仅使用 Anthropic 官方 Claude Code 文档、Anthropic 官方安装端点和 Anthropic 官方 GitHub 仓库。本文用于约束 EggDoc 一键安装脚本的实现，不是面向最终用户的安装教程。
 
@@ -35,7 +35,7 @@ curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del in
 - 硬件：至少 4 GB 内存，x64 或 ARM64 处理器。
 - 需要互联网连接，并且用户所在地区必须在 Anthropic 支持国家或地区列表内。
 - 支持 Bash、Zsh、PowerShell 和 CMD。
-- 原生安装不依赖 Node.js。Node.js 22+ 只适用于可选的 npm 安装方式。
+- 原生安装不依赖 Node.js。EggDoc 选择的 npm 安装方式要求 Node.js 24.18.0 或更高版本。
 
 来源：[System requirements](https://code.claude.com/docs/en/setup#system-requirements)、[Install with npm](https://code.claude.com/docs/en/setup#install-with-npm)。
 
@@ -160,7 +160,7 @@ winget uninstall Anthropic.ClaudeCode
 
 包装器可以承诺：
 
-- 检测 Node.js 22，在缺失或过旧时使用 Node.js 官方发布源或精确 winget 包自动安装。
+- 检测 Node.js 24.18.0，在缺失或过旧时使用 Node.js 官方 Node 24 LTS 发布源或精确 winget 包自动安装。
 - 通过官方 npm 包支持 macOS/Linux/WSL 与 Windows PowerShell，并按需透传官方支持的发布通道或明确版本。
 - npm 安装正常退出后刷新/持久化 PATH，并运行 `claude --version` 验证命令是否可用。
 - 安装失败时保留官方错误信息和非零退出状态，不伪造成功结果。

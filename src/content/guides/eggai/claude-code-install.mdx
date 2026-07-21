@@ -27,7 +27,7 @@ claude --version
 
 看到版本号即表示安装完成。
 
-脚本会先检测 Node.js 22 和 npm。缺失或版本过低时，macOS、Linux 和 WSL 从 `nodejs.org` 下载并校验 Node 22，Windows 通过精确 winget 包 `OpenJS.NodeJS.LTS` 自动安装。随后脚本通过 `https://registry.npmmirror.com` 安装 Anthropic 官方 npm 包 `@anthropic-ai/claude-code`，并把 npm 全局命令目录加入 PATH。npm 镜像只用于本次安装命令，不会永久修改用户 npm 配置。默认模式不修改 Claude Code 配置；选择 EggAi 配置后，脚本会保留原有设置并写入 EggAi 网关配置。
+脚本会先检测 Node.js 24.18.0 或更高版本和 npm。缺失或版本过低时，macOS、Linux 和 WSL 从 `nodejs.org` 下载并校验 Node 24 LTS，Windows 通过精确 winget 包 `OpenJS.NodeJS.LTS` 自动安装。随后脚本通过 `https://registry.npmmirror.com` 安装 Anthropic 官方 npm 包 `@anthropic-ai/claude-code`，并把 npm 全局命令目录加入 PATH。npm 镜像只用于本次安装命令，不会永久修改用户 npm 配置。默认模式不修改 Claude Code 配置；选择 EggAi 配置后，脚本会保留原有设置并写入 EggAi 网关配置。
 
 ## 了解 EggAi 配置
 

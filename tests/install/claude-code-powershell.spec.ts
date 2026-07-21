@@ -79,12 +79,11 @@ function runWithInstallerFixture(
     [
       "@echo off",
       "set NODE_AVAILABLE=%FAKE_NODE_AVAILABLE%",
-      "set NODE_MAJOR=%FAKE_NODE_MAJOR%",
+      "set NODE_VERSION=%FAKE_NODE_VERSION%",
       `if exist "${nodeMarker}" if not "%FAKE_NODE_REMAINS_UNAVAILABLE%"=="1" set NODE_AVAILABLE=1`,
-      `if exist "${nodeMarker}" set NODE_MAJOR=22`,
+      `if exist "${nodeMarker}" set NODE_VERSION=24.18.0`,
       "if not \"%NODE_AVAILABLE%\"==\"1\" exit /b 65",
-      "if \"%~1\"==\"-p\" echo %NODE_MAJOR%& exit /b 0",
-      "if \"%~1\"==\"--version\" echo v%NODE_MAJOR%.0.0& exit /b 0",
+      "if \"%~1\"==\"--version\" echo v%NODE_VERSION%& exit /b 0",
       "exit /b 64",
       "",
     ].join("\r\n"),
@@ -106,6 +105,7 @@ function runWithInstallerFixture(
     [
       "@echo off",
       `echo %*>>"${wingetLog}"`,
+      `if defined FAKE_WINGET_EXIT if "%FAKE_WINGET_CREATE_NODE%"=="1" type nul >"${nodeMarker}"`,
       "if defined FAKE_WINGET_EXIT exit /b %FAKE_WINGET_EXIT%",
       `type nul >"${nodeMarker}"`,
       "exit /b 0",
@@ -165,7 +165,7 @@ function runWithInstallerFixture(
           EGGDOC_NPM_REGISTRY_STATE_LOG: registryStateLog,
           EGGDOC_SETTINGS_PATH: path.join(home, ".claude", "settings.json"),
           FAKE_NODE_AVAILABLE: "1",
-          FAKE_NODE_MAJOR: "22",
+          FAKE_NODE_VERSION: "24.18.0",
           HOME: home,
           PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
           ProgramFiles: path.join(root, "program-files"),
@@ -238,13 +238,31 @@ test("Claude Code PowerShell dry-run returns control to the caller", () => {
   expect(result.stdout).toContain("CALLER_CONTINUED");
 });
 
+test("Claude Code PowerShell detects the real Node.js runtime in Windows PowerShell", () => {
+  const quotedScriptPath = scriptPath.replaceAll("'", "''");
+  const quotedNodeDirectory = path.dirname(process.execPath).replaceAll("'", "''");
+  const result = runPowerShell([
+    "-Command",
+    `. '${quotedScriptPath}' -DryRun | Out-Null; ` +
+      `$runtime = Get-NodeRuntime -PreferredDirectory '${quotedNodeDirectory}'; ` +
+      "if (-not $runtime) { [Console]::Error.WriteLine('NODE_RUNTIME_NOT_FOUND'); exit 1 }; " +
+      "Write-Output \"$($runtime.Major)|$($runtime.Version)\"",
+  ]);
+
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stderr).toBe("");
+  expect(result.stdout.trim().split(/\r?\n/).at(-1)).toBe(
+    `${process.versions.node.split(".")[0]}|${process.version}`,
+  );
+});
+
 test("Claude Code PowerShell dry-run delegates installation without changing configuration", () => {
   const result = runPowerShell(["-File", scriptPath, "-DryRun"]);
 
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
   expect(result.stdout).toContain("Claude Code installer dry run");
-  expect(result.stdout).toContain("Node.js requirement: >=22");
+  expect(result.stdout).toContain("Node.js requirement: >=24.18.0");
   expect(result.stdout).toContain("Node.js automatic install: winget OpenJS.NodeJS.LTS");
   expect(result.stdout).toContain("npm package: @anthropic-ai/claude-code@latest");
   expect(result.stdout).toContain("npm registry: https://registry.npmmirror.com");
@@ -404,7 +422,7 @@ Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBi
     FAKE_NODE_AVAILABLE: "0",
   });
   const outdated = runWithInstallerFixture(installer, false, "", undefined, {
-    FAKE_NODE_MAJOR: "18",
+    FAKE_NODE_VERSION: "24.17.9",
   });
 
   for (const installed of [missing, outdated]) {
@@ -412,6 +430,23 @@ Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBi
     expect(installed.wingetCommands).toContain("install --id OpenJS.NodeJS.LTS --exact --source winget");
     expect(installed.npmCommands).toContain("@anthropic-ai/claude-code@latest");
   }
+});
+
+test("Claude Code PowerShell rechecks Node.js when winget reports no applicable upgrade", () => {
+  const installed = runWithInstallerFixture(`
+$claudeBin = Join-Path $env:USERPROFILE ".local\\bin"
+New-Item -ItemType Directory -Force -Path $claudeBin | Out-Null
+Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBin "claude.exe") -Force
+`, false, "", undefined, {
+    FAKE_NODE_AVAILABLE: "0",
+    FAKE_WINGET_CREATE_NODE: "1",
+    FAKE_WINGET_EXIT: "-1978335189",
+  });
+
+  expect(installed.result.status, installed.result.stderr).toBe(0);
+  expect(installed.result.stdout).toContain("Node.js LTS is already up to date according to winget");
+  expect(installed.result.stdout).toContain("Using Node.js v24.18.0");
+  expect(installed.npmCommands).toContain("@anthropic-ai/claude-code@latest");
 });
 
 test("Claude Code PowerShell reports winget and post-install Node verification failures", () => {
@@ -423,14 +458,22 @@ test("Claude Code PowerShell reports winget and post-install Node verification f
     FAKE_NODE_AVAILABLE: "0",
     FAKE_NODE_REMAINS_UNAVAILABLE: "1",
   });
+  const noUpgradeButStillUnavailable = runWithInstallerFixture("exit 0\n", false, "", undefined, {
+    FAKE_NODE_AVAILABLE: "0",
+    FAKE_WINGET_EXIT: "-1978335189",
+  });
 
   expect(wingetFailed.result.status).not.toBe(0);
   expect(wingetFailed.result.stderr).toContain("winget could not install the official Node.js LTS package (exit code 23)");
   expect(wingetFailed.npmCommands).toBe("");
   expect(verificationFailed.result.status).not.toBe(0);
-  expect(verificationFailed.result.stderr).toContain("Node.js 22 or newer and npm.cmd are required");
-  expect(verificationFailed.result.stderr).toContain("verification failed after winget instal");
+  expect(verificationFailed.result.stderr).toContain("Node.js 24.18.0 or newer and npm.cmd are required");
+  expect(verificationFailed.result.stderr).toContain("installation. Restart PowerShell and retry");
   expect(verificationFailed.npmCommands).toBe("");
+  expect(noUpgradeButStillUnavailable.result.status).not.toBe(0);
+  expect(noUpgradeButStillUnavailable.result.stderr).toContain("installation. Restart PowerShell and retry");
+  expect(noUpgradeButStillUnavailable.result.stderr).not.toContain("winget could not install");
+  expect(noUpgradeButStillUnavailable.npmCommands).toBe("");
 });
 
 test("Claude Code PowerShell scopes the mainland registry to npm", () => {
