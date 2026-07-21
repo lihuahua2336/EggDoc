@@ -28,6 +28,9 @@ jobs:
           ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
           detect --source /repo --no-banner --redact --verbose
 
+      - name: Validate Shell installer syntax
+        run: sh -n public/install/*.sh
+
   verify:
     name: Run production test suite
     runs-on: windows-latest
@@ -47,8 +50,29 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install chromium
 
-      - name: Run tests and production build
-        run: npm test
+      - name: Validate PowerShell installer syntax
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem public/install/*.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              $errors | ForEach-Object { Write-Error "$($_.Extent.File): $($_.Message)" }
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Build test application
+        run: npm run build:test
+
+      - name: Run browser and unit tests
+        run: npx playwright test tests/e2e tests/unit
+
+      - name: Verify production build
+        run: npm run test:preview
 
   publish:
     name: Build and publish container
