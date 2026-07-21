@@ -24,13 +24,23 @@ const scriptPath = path.join(repoRoot, "public/install/claude-code.ps1");
 function runPowerShell(args: string[], extraEnv: NodeJS.ProcessEnv = {}) {
   return spawnSync(
     powershell,
-    ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", ...args],
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-OutputFormat",
+      "Text",
+      "-ExecutionPolicy",
+      "Bypass",
+      ...args,
+    ],
     {
       cwd: repoRoot,
       encoding: "utf8",
       env: {
         ...process.env,
         NPM_CONFIG_REGISTRY: undefined,
+        PSModulePath: undefined,
         ...extraEnv,
       },
     },

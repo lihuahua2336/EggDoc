@@ -33,7 +33,16 @@ function runPowerShell(
 ) {
   return spawnSync(
     powershell,
-    ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", ...args],
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-OutputFormat",
+      "Text",
+      "-ExecutionPolicy",
+      "Bypass",
+      ...args,
+    ],
     {
       cwd: repoRoot,
       encoding: "utf8",
@@ -45,6 +54,7 @@ function runPowerShell(
         LANGUAGE: undefined,
         MODEL: undefined,
         NPM_CONFIG_REGISTRY: undefined,
+        PSModulePath: undefined,
         SK_KEY: undefined,
         ...(codexHome ? { CODEX_HOME: codexHome } : {}),
         ...extraEnv,
