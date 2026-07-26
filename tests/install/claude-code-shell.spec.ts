@@ -225,9 +225,9 @@ test("Claude Code Shell EggAi dry-run validates inputs and redacts the credentia
     "--baseurl",
     "https://api.example.test/v1",
     "--model",
-    "claude-sonnet-5",
+    "claude-opus-5",
     "--opus-model",
-    "claude-opus-4-8",
+    "claude-opus-5",
     "--sonnet-model",
     "claude-sonnet-5",
     "--haiku-model",
@@ -239,7 +239,8 @@ test("Claude Code Shell EggAi dry-run validates inputs and redacts the credentia
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Mode: eggai");
   expect(result.stdout).toContain("Anthropic Base URL: https://api.example.test");
-  expect(result.stdout).toContain("Opus model: claude-opus-4-8");
+  expect(result.stdout).toContain("Model: claude-opus-5");
+  expect(result.stdout).toContain("Opus model: claude-opus-5");
   expect(result.stdout).toContain("Haiku model: claude-haiku-4-5");
   expect(result.stdout).toContain("API key: provided (redacted)");
   expect(result.stdout).toContain("Would modify Claude Code configuration: yes");

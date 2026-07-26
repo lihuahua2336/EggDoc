@@ -69,16 +69,16 @@ test("Claude Code uses the first EggAi credential and can switch configuration g
     "https://edge.fixture.eggai.test",
   );
   await expect(panel.getByTestId("claude-code-quick-command")).toContainText(
-    "--model 'claude-fable-5'",
+    "--model 'claude-opus-5'",
   );
   await expect(panel.getByTestId("claude-code-quick-command")).toContainText(
-    "--opus-model 'claude-opus-4-8'",
+    "--opus-model 'claude-opus-5'",
   );
   await expect(panel.getByTestId("claude-code-quick-command")).toContainText(
     "--haiku-model 'claude-haiku-4-5'",
   );
   await expect(panel.getByTestId("claude-code-model-summary")).toHaveText(
-    "主模型 claude-fable-5 · Opus claude-opus-4-8 · Fable claude-fable-5 · Haiku claude-haiku-4-5",
+    "主模型 claude-opus-5 · Opus claude-opus-5 · Fable claude-fable-5 · Haiku claude-haiku-4-5",
   );
 
   await panel.getByRole("button", { name: "复制安装命令" }).click();

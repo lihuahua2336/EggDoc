@@ -35,12 +35,13 @@ test("an active EggAi API Account receives credentials in a private response", a
       },
     ],
     modelSummary: {
-      availableCount: 9,
+      availableCount: 10,
       names: [
         "gpt-5.2",
         "claude-sonnet-5",
         "claude-fable-5",
         "claude-haiku-4-5",
+        "claude-opus-5",
         "claude-opus-4-8",
         "claude-opus-4-7",
         "claude-opus-4-6",

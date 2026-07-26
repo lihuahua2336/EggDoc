@@ -73,13 +73,14 @@ test("Claude Code assigns the preferred EggAi model for each model role", () => 
       "claude-haiku-5",
       "claude-haiku-4-5",
       "claude-opus-4-8",
+      "claude-opus-5",
       "claude-sonnet-5",
     ]),
   ).toEqual({
     fable: "claude-fable-5",
     haiku: "claude-haiku-4-5",
-    main: "claude-fable-5",
-    opus: "claude-opus-4-8",
+    main: "claude-opus-5",
+    opus: "claude-opus-5",
     sonnet: "claude-sonnet-5",
   });
 });
@@ -110,6 +111,9 @@ test("Claude Code uses only explicitly supported EggAi model identifiers", () =>
 });
 
 test("Claude Code applies the EggAi main model priority in order", () => {
+  expect(selectClaudeCodeModels(["claude-fable-5", "claude-opus-5"])?.main).toBe(
+    "claude-opus-5",
+  );
   expect(selectClaudeCodeModels(["claude-sonnet-5", "claude-opus-4-8"])?.main).toBe(
     "claude-sonnet-5",
   );

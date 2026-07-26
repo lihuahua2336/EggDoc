@@ -89,7 +89,7 @@ export type ClaudeCodeModels = {
 const supportedClaudeModels = {
   fable: ["claude-fable-5"],
   haiku: ["claude-haiku-4-5"],
-  opus: ["claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6"],
+  opus: ["claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6"],
   sonnet: ["claude-sonnet-5", "claude-sonnet-4-6"],
 } as const;
 
@@ -97,9 +97,10 @@ export function selectClaudeCodeModels(modelNames: string[]): ClaudeCodeModels |
   const sonnet = selectSupportedModel(modelNames, supportedClaudeModels.sonnet);
   const sonnet5 = selectSupportedModel(modelNames, ["claude-sonnet-5"]);
   const opus = selectSupportedModel(modelNames, supportedClaudeModels.opus);
+  const opus5 = selectSupportedModel(modelNames, ["claude-opus-5"]);
   const fable = selectSupportedModel(modelNames, supportedClaudeModels.fable);
   const haiku = selectSupportedModel(modelNames, supportedClaudeModels.haiku);
-  const main = fable ?? sonnet5 ?? opus ?? sonnet ?? haiku;
+  const main = opus5 ?? fable ?? sonnet5 ?? opus ?? sonnet ?? haiku;
   if (!main) return undefined;
 
   return {

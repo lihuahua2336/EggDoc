@@ -31,9 +31,9 @@ Claude Code 的 EggAi 配置不会创建 `auth.json`。API Key 直接保存在 `
   "env": {
     "ANTHROPIC_BASE_URL": "https://api.eggai.icu",
     "ANTHROPIC_AUTH_TOKEN": "sk-你的-EggAi-API-Key",
-    "ANTHROPIC_MODEL": "claude-fable-5",
+    "ANTHROPIC_MODEL": "claude-opus-5",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-8",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5",
     "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5"
   }
@@ -53,15 +53,15 @@ Claude Code 的静态配置保存一个主模型和各模型角色的默认值�
 
 | Claude Code 角色 | 默认 EggAi 模型 |
 | --- | --- |
-| 主模型 | `claude-fable-5` |
+| 主模型 | `claude-opus-5` |
 | Sonnet | `claude-sonnet-5` |
-| Opus | `claude-opus-4-8` |
+| Opus | `claude-opus-5` |
 | Fable | `claude-fable-5` |
 | Haiku | `claude-haiku-4-5` |
 
-EggAi 安装命令只会从已确认的模型标识中选择：`claude-opus-4-6`、`claude-opus-4-7`、`claude-opus-4-8`、`claude-sonnet-4-6`、`claude-sonnet-5`、`claude-fable-5` 和 `claude-haiku-4-5`。未在此列表中的相似名称不会用于生成配置。
+EggAi 安装命令只会从已确认的模型标识中选择：`claude-opus-4-6`、`claude-opus-4-7`、`claude-opus-4-8`、`claude-opus-5`、`claude-sonnet-4-6`、`claude-sonnet-5`、`claude-fable-5` 和 `claude-haiku-4-5`。未在此列表中的相似名称不会用于生成配置。
 
-主模型依次优先使用 `claude-fable-5`、`claude-sonnet-5`、可用的最高版本 Opus、`claude-sonnet-4-6` 和 `claude-haiku-4-5`。
+主模型依次优先使用 `claude-opus-5`、`claude-fable-5`、`claude-sonnet-5`、可用的最高版本旧版 Opus、`claude-sonnet-4-6` 和 `claude-haiku-4-5`。
 
 如果某个首选模型不在当前账户的模型列表中，安装页会选择该家族可用的最高版本；仍找不到时才回退到主模型。
 

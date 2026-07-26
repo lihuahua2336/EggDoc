@@ -158,13 +158,13 @@ EggAi 当前的 `modelSummary.names` 只是字符串列表，没有协议、家�
 
 | Claude Code 角色 | 首选 EggAi 模型 | 回退规则 |
 | --- | --- | --- |
-| 主模型 | `claude-fable-5` | 依次回退到 Sonnet 5、最高可用 Opus、Sonnet 4.6、Haiku 4.5 |
+| 主模型 | `claude-opus-5` | 依次回退到 Fable 5、Sonnet 5、最高可用旧版 Opus、Sonnet 4.6、Haiku 4.5 |
 | Sonnet | `claude-sonnet-5` | 最高版本 Sonnet，最后使用主模型 |
-| Opus | `claude-opus-4-8` | 最高版本 Opus，最后使用主模型 |
+| Opus | `claude-opus-5` | 最高版本 Opus，最后使用主模型 |
 | Fable | `claude-fable-5` | 最高版本 Fable，再使用 Sonnet 或主模型 |
 | Haiku | `claude-haiku-4-5` | 最高版本 Haiku，再使用 Fable、Sonnet 或主模型 |
 
-模型选择严格限制为 `claude-opus-4-6`、`claude-opus-4-7`、`claude-opus-4-8`、`claude-sonnet-4-6`、`claude-sonnet-5`、`claude-fable-5` 和 `claude-haiku-4-5`。相似但未经确认的模型名称不会作为回退项。Claude Code 的静态网关配置是“主模型加家族默认值”，不是把模型目录中的每个 ID 都逐项写进 `settings.json`。
+模型选择严格限制为 `claude-opus-4-6`、`claude-opus-4-7`、`claude-opus-4-8`、`claude-opus-5`、`claude-sonnet-4-6`、`claude-sonnet-5`、`claude-fable-5` 和 `claude-haiku-4-5`。相似但未经确认的模型名称不会作为回退项。Claude Code 的静态网关配置是“主模型加家族默认值”，不是把模型目录中的每个 ID 都逐项写进 `settings.json`。
 
 `ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES` 只适用于 Bedrock、Google Cloud、Microsoft Foundry 等提供商配置；在普通 `ANTHROPIC_BASE_URL` 网关后不能靠这些变量声明虚假的 thinking 或 effort 能力。模型 ID 的 `_NAME` 和 `_DESCRIPTION` 可用于网关显示名称，但功能仍取决于真实协议支持。来源：[Customize pinned model display and capabilities](https://code.claude.com/docs/en/model-config#customize-pinned-model-display-and-capabilities)。
 
