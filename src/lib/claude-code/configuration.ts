@@ -114,7 +114,7 @@ export function selectClaudeCodeModels(modelNames: string[]): ClaudeCodeModels |
 
 function selectSupportedModel(modelNames: string[], priority: readonly string[]) {
   for (const supportedName of priority) {
-    const match = modelNames.find((name) => name.toLowerCase() === supportedName);
+    const match = modelNames.find((name) => name === supportedName);
     if (match) return match;
   }
   return undefined;

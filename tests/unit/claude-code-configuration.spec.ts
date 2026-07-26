@@ -102,6 +102,7 @@ test("Claude Code uses only explicitly supported EggAi model identifiers", () =>
   });
   expect(
     selectClaudeCodeModels([
+      "CLAUDE-OPUS-5",
       "claude-sonnet-4-8",
       "claude-haiku-5",
       "anthropic/claude-opus-4-8",
