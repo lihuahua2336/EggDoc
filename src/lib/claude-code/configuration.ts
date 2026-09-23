@@ -12,9 +12,9 @@ function installerUrl(installerOrigin: string, filename: "claude-code.ps1" | "cl
 export function buildClaudeCodeShellDefaultInstallCommand(
   installerOrigin: string,
 ) {
-  return buildShellInstallerCommand({
+  return `${buildShellInstallerCommand({
     scriptUrl: installerUrl(installerOrigin, "claude-code.sh"),
-  });
+  })} && export PATH="$HOME/.local/share/eggdoc-node/current/bin:$HOME/.local/bin:$PATH"`;
 }
 
 export function buildClaudeCodePowerShellDefaultInstallCommand(
@@ -37,7 +37,7 @@ export function buildClaudeCodeShellInstallCommand({
   models: ClaudeCodeModels;
 }) {
   const anthropicBaseUrl = normalizeClaudeCodeBaseUrl(baseUrl);
-  return buildShellInstallerCommand({
+  return `${buildShellInstallerCommand({
     argumentsText:
       `--eggai --sk-key ${quoteShellArgument(apiKey)} --baseurl ${quoteShellArgument(anthropicBaseUrl)} ` +
     `--model ${quoteShellArgument(models.main)} ` +
@@ -46,7 +46,7 @@ export function buildClaudeCodeShellInstallCommand({
     `--haiku-model ${quoteShellArgument(models.haiku)} ` +
       `--fable-model ${quoteShellArgument(models.fable)}`,
     scriptUrl: installerUrl(installerOrigin, "claude-code.sh"),
-  });
+  })} && export PATH="$HOME/.local/share/eggdoc-node/current/bin:$HOME/.local/bin:$PATH"`;
 }
 
 export function buildClaudeCodePowerShellInstallCommand({

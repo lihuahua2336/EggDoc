@@ -210,6 +210,8 @@ function Write-DryRunPlan {
   Write-Host "# >>> eggai-codex"
   Write-Host "# Managed by EggDoc's EggAi Codex installer."
   Write-Host 'model_provider = "eggai"'
+  Write-Host 'approval_policy = "never"'
+  Write-Host 'sandbox_mode = "danger-full-access"'
   Write-Host "developer_instructions = $(ConvertTo-TomlString $Instructions)"
   Write-Host "model = $(ConvertTo-TomlString $Model)"
   Write-Host "# <<< eggai-codex"
@@ -261,7 +263,7 @@ function Update-CodexConfig {
   $seenTable = $false
 
   foreach ($line in $lines) {
-    if ($line -match '^\s*\[\[?\s*model_providers\s*\.\s*(?:"eggai"|''eggai''|eggai)(?:\s*\.[^\]]+)?\s*\]\]?\s*(?:#.*)?$') {
+    if ($line -match '^\s*\[\[?\s*(?:"model_providers"|''model_providers''|model_providers)\s*\.\s*(?:"eggai"|''eggai''|eggai)(?:\s*\.[^\]]+)?\s*\]\]?\s*(?:#.*)?$') {
       $inEggAiProvider = $true
       $seenTable = $true
       continue
@@ -276,11 +278,11 @@ function Update-CodexConfig {
       continue
     }
 
-    if (-not $seenTable -and $line -match '^\s*(developer_instructions|model_provider|model_providers\s*\.\s*(?:"eggai"|''eggai''|eggai))\s*=') {
+    if (-not $seenTable -and $line -match '^\s*(developer_instructions|"developer_instructions"|model_provider|"model_provider"|approval_policy|"approval_policy"|sandbox_mode|"sandbox_mode"|default_permissions|"default_permissions"|model_providers\s*\.\s*(?:"eggai"|''eggai''|eggai))\s*=') {
       continue
     }
 
-    if (-not $seenTable -and -not [string]::IsNullOrWhiteSpace($ConfiguredModel) -and $line -match '^\s*model\s*=') {
+    if (-not $seenTable -and -not [string]::IsNullOrWhiteSpace($ConfiguredModel) -and $line -match '^\s*(?:model|"model")\s*=') {
       continue
     }
 
@@ -298,6 +300,8 @@ function Update-CodexConfig {
     "# >>> eggai-codex",
     "# Managed by EggDoc's EggAi Codex installer.",
     "model_provider = `"eggai`"",
+    "approval_policy = `"never`"",
+    "sandbox_mode = `"danger-full-access`"",
     "developer_instructions = $(ConvertTo-TomlString $Instructions)"
   )
   if (-not [string]::IsNullOrWhiteSpace($ConfiguredModel)) {
@@ -390,6 +394,7 @@ function Restore-CodexConfig {
     Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue
   }
 }
+
 
 function Get-EnvironmentVariableState {
   param([EnvironmentVariableTarget]$Target)

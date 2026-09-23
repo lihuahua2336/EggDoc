@@ -14,6 +14,8 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+test.skip(process.platform !== "win32", "requires Windows PowerShell and winget");
+
 const powershell = path.join(
   process.env.SystemRoot ?? "C:\\Windows",
   "System32/WindowsPowerShell/v1.0/powershell.exe",
@@ -103,6 +105,9 @@ function runWithInstallerFixture(
     [
       "@echo off",
       `echo %*>>"${npmLog}"`,
+      'if "%~1"=="--version" echo 11.0.0& exit /b 0',
+      'if "%~1"=="view" echo 9.9.9& exit /b 0',
+      'if "%~1"=="list" echo {"dependencies":{}}& exit /b 0',
       `if "%~1"=="prefix" echo ${path.join(home, ".local", "bin")}& exit /b 0`,
       "if defined FAKE_NPM_EXIT exit /b %FAKE_NPM_EXIT%",
       `"${powershell}" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${fixture}"`,
@@ -275,7 +280,7 @@ test("Claude Code PowerShell dry-run delegates installation without changing con
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
   expect(result.stdout).toContain("Claude Code installer dry run");
-  expect(result.stdout).toContain("Node.js requirement: >=24.18.0");
+  expect(result.stdout).toContain("Node.js requirement: working Node.js and npm.cmd");
   expect(result.stdout).toContain("Node.js automatic install: winget OpenJS.NodeJS.LTS");
   expect(result.stdout).toContain("npm package: @anthropic-ai/claude-code@latest");
   expect(result.stdout).toContain("npm registry: https://registry.npmmirror.com");
@@ -461,7 +466,7 @@ Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBi
   for (const installed of [missing, outdated]) {
     expect(installed.result.status, installed.result.stderr).toBe(0);
     expect(installed.wingetCommands).toContain("install --id OpenJS.NodeJS.LTS --exact --source winget");
-    expect(installed.npmCommands).toContain("@anthropic-ai/claude-code@latest");
+    expect(installed.npmCommands).toContain("@anthropic-ai/claude-code@9.9.9");
   }
 });
 
@@ -479,7 +484,7 @@ Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBi
   expect(installed.result.status, installed.result.stderr).toBe(0);
   expect(installed.result.stdout).toContain("Node.js LTS is already up to date according to winget");
   expect(installed.result.stdout).toContain("Using Node.js v24.18.0");
-  expect(installed.npmCommands).toContain("@anthropic-ai/claude-code@latest");
+  expect(installed.npmCommands).toContain("@anthropic-ai/claude-code@9.9.9");
 });
 
 test("Claude Code PowerShell reports winget and post-install Node verification failures", () => {
@@ -500,7 +505,7 @@ test("Claude Code PowerShell reports winget and post-install Node verification f
   expect(wingetFailed.result.stderr).toContain("winget could not install the official Node.js LTS package (exit code 23)");
   expect(wingetFailed.npmCommands).toBe("");
   expect(verificationFailed.result.status).not.toBe(0);
-  expect(verificationFailed.result.stderr).toContain("Node.js 24.18.0 or newer and npm.cmd are required");
+  expect(verificationFailed.result.stderr).toContain("Node.js and npm.cmd are required");
   expect(verificationFailed.result.stderr).toContain("installation. Restart PowerShell and retry");
   expect(verificationFailed.npmCommands).toBe("");
   expect(noUpgradeButStillUnavailable.result.status).not.toBe(0);
@@ -523,7 +528,7 @@ Copy-Item -LiteralPath $env:EGGDOC_NODE_BINARY -Destination (Join-Path $claudeBi
 
   expect(installed.result.status, installed.result.stderr).toBe(0);
   expect(installed.registryState).toBe("missing");
-  expect(installed.npmCommands).toContain("install --global @anthropic-ai/claude-code@latest");
+  expect(installed.npmCommands).toContain("install --global @anthropic-ai/claude-code@9.9.9");
   expect(installed.npmCommands).toContain("--registry https://registry.npmmirror.com");
   expect(installed.npmCommands).toContain("--include=optional --no-audit --no-fund");
   expect(failed.result.status).not.toBe(0);

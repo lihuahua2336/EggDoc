@@ -153,6 +153,12 @@ pre {
   padding: 0;
 }
 
+.prose :where(table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .prose :where(pre code) {
   display: block;
   min-width: max-content;

@@ -13,12 +13,10 @@ EGGAI_MODE=0
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
 NPM_PREFIX="$HOME/.local"
 NPM_PACKAGE="@openai/codex"
-NODE_MINIMUM_VERSION=24.18.0
-NODE_MINIMUM_MAJOR=24
-NODE_MINIMUM_MINOR=18
-NODE_MINIMUM_PATCH=0
-NODE_RELEASE_LINE=24
-NODE_RELEASE_URL="https://nodejs.org/dist/latest-v${NODE_RELEASE_LINE}.x"
+NODE_INDEX_URL="https://nodejs.org/dist/index.tab"
+NODE_RELEASE_LINE=""
+NODE_RELEASE_URL=""
+NODE_LTS_VERSION=""
 NODE_INSTALL_ROOT="$HOME/.local/share/eggdoc-node"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 CONFIG_FILE="$CODEX_HOME/config.toml"
@@ -276,11 +274,25 @@ node_runtime_is_usable() {
   case "$node_major:$node_minor:$node_patch" in
     :*|*::*|*:|*[!0-9:]*) return 1 ;;
   esac
-  [ "$node_major" -gt "$NODE_MINIMUM_MAJOR" ] && return 0
-  [ "$node_major" -lt "$NODE_MINIMUM_MAJOR" ] && return 1
-  [ "$node_minor" -gt "$NODE_MINIMUM_MINOR" ] && return 0
-  [ "$node_minor" -lt "$NODE_MINIMUM_MINOR" ] && return 1
-  [ "$node_patch" -ge "$NODE_MINIMUM_PATCH" ]
+  npm --version >/dev/null 2>&1 || return 1
+  return 0
+}
+
+resolve_node_lts() {
+  node_index="$(mktemp "${TMPDIR:-/tmp}/eggdoc-node-index.XXXXXX")" || fail "could not create a Node.js metadata file."
+  if ! download_node_file "$NODE_INDEX_URL" "$node_index"; then
+    rm -f "$node_index"
+    fail "could not read the official Node.js release index."
+  fi
+  node_lts="$(awk -F '\t' 'NR == 1 { if ($1 != "version" || $10 != "lts") exit 2; next } $10 != "-" { print $1; exit }' "$node_index")" || :
+  rm -f "$node_index"
+  case "$node_lts" in
+    v[0-9]*.[0-9]*.[0-9]*) ;;
+    *) fail "the official Node.js release index did not contain a valid LTS version." ;;
+  esac
+  NODE_LTS_VERSION="${node_lts#v}"
+  NODE_RELEASE_LINE="${NODE_LTS_VERSION%%.*}"
+  NODE_RELEASE_URL="https://nodejs.org/dist/latest-v${NODE_RELEASE_LINE}.x"
 }
 
 node_archive_digest() {
@@ -385,22 +397,23 @@ ensure_node_runtime() {
   if node_runtime_is_usable; then
     echo "Using Node.js $(node --version)."
   else
+    resolve_node_lts
     echo "Installing Node.js ${NODE_RELEASE_LINE}.x from nodejs.org..."
     install_node_runtime || fail "automatic Node.js installation failed."
   fi
   activate_command_path
-  node_runtime_is_usable || fail "Node.js $NODE_MINIMUM_VERSION or newer and npm are required, but verification failed after installation."
+  node_runtime_is_usable || fail "Node.js and npm are required, but verification failed after installation."
 }
 
 print_plan() {
   echo "Codex installer dry run"
   echo "Mode: $([ "$EGGAI_MODE" = "1" ] && echo eggai || echo default)"
-  echo "Node.js requirement: >=$NODE_MINIMUM_VERSION"
-  echo "Node.js automatic install source: $NODE_RELEASE_URL"
+  echo "Node.js requirement: working Node.js and npm"
+  echo "Node.js automatic install source if missing: nodejs.org current LTS release"
   echo "npm package: $NPM_PACKAGE@latest"
   echo "npm registry: $NPM_REGISTRY"
   echo "Codex home: $CODEX_HOME"
-  echo "Would install/update Codex: yes"
+  echo "Would install Codex if missing or update it if an npm newer version exists: yes"
 
   if [ "$EGGAI_MODE" = "0" ]; then
     echo "Would write config.toml: no"
@@ -429,6 +442,8 @@ print_plan() {
   echo "# >>> eggai-codex"
   echo "# Managed by EggDoc's EggAi Codex installer."
   echo "model_provider = \"eggai\""
+  echo 'approval_policy = "never"'
+  echo 'sandbox_mode = "danger-full-access"'
   echo "developer_instructions = \"$(developer_instructions | sed 's/\\/\\\\/g; s/"/\\"/g')\""
   echo "model = \"$(toml_escape "$MODEL")\""
   echo "# <<< eggai-codex"
@@ -487,7 +502,16 @@ NPM_CONFIG_REGISTRY="$NPM_REGISTRY"
 NPM_CONFIG_PREFIX="$NPM_PREFIX"
 export NPM_CONFIG_REGISTRY
 export NPM_CONFIG_PREFIX
-if npm install --global "$NPM_PACKAGE@latest" \
+LATEST_CODEX_VERSION="$(npm view "$NPM_PACKAGE" version --registry "$NPM_REGISTRY" 2>/dev/null)" || \
+  fail "npm could not check the latest Codex version from $NPM_REGISTRY."
+case "$LATEST_CODEX_VERSION" in
+  ''|*[!0-9A-Za-z.+-]*) fail "npm returned an invalid Codex version." ;;
+esac
+INSTALLED_CODEX_VERSION="$(npm list --global "$NPM_PACKAGE" --depth=0 --json --prefix "$NPM_PREFIX" 2>/dev/null | \
+  node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{try{console.log(JSON.parse(s).dependencies?.["@openai/codex"]?.version??"")}catch{console.log("")}})')" || :
+if [ "$INSTALLED_CODEX_VERSION" = "$LATEST_CODEX_VERSION" ]; then
+  echo "Codex $INSTALLED_CODEX_VERSION is already up to date."
+elif npm install --global "$NPM_PACKAGE@$LATEST_CODEX_VERSION" \
   --prefix "$NPM_PREFIX" --registry "$NPM_REGISTRY" \
   --include=optional --no-audit --no-fund; then
   :
@@ -635,7 +659,7 @@ awk -v remove_model="$REMOVE_MODEL" '
   in_managed {
     next
   }
-  /^[[:space:]]*\[[[:space:]]*\[?[[:space:]]*model_providers[[:space:]]*\.[[:space:]]*(eggai|"eggai"|\047eggai\047)([[:space:]]*\.[^]]+)?[[:space:]]*\]?[[:space:]]*\][[:space:]]*(#.*)?$/ {
+  /^[[:space:]]*\[[[:space:]]*\[?[[:space:]]*(model_providers|"model_providers"|\047model_providers\047)[[:space:]]*\.[[:space:]]*(eggai|"eggai"|\047eggai\047)([[:space:]]*\.[^]]+)?[[:space:]]*\]?[[:space:]]*\][[:space:]]*(#.*)?$/ {
     in_eggai_provider = 1
     seen_table = 1
     next
@@ -647,10 +671,10 @@ awk -v remove_model="$REMOVE_MODEL" '
   in_eggai_provider {
     next
   }
-  !seen_table && /^[[:space:]]*(developer_instructions|model_provider|model_providers[.][[:space:]]*(eggai|"eggai"|\047eggai\047))[[:space:]]*=/ {
+  !seen_table && /^[[:space:]]*(developer_instructions|"developer_instructions"|model_provider|"model_provider"|approval_policy|"approval_policy"|sandbox_mode|"sandbox_mode"|default_permissions|"default_permissions"|model_providers[.][[:space:]]*(eggai|"eggai"|\047eggai\047))[[:space:]]*=/ {
     next
   }
-  !seen_table && remove_model && /^[[:space:]]*model[[:space:]]*=/ {
+  !seen_table && remove_model && /^[[:space:]]*(model|"model")[[:space:]]*=/ {
     next
   }
   {
@@ -688,6 +712,8 @@ MODEL_ESCAPED="$(toml_escape "$MODEL")"
   echo "# >>> eggai-codex"
   echo "# Managed by EggDoc's EggAi Codex installer."
   echo "model_provider = \"eggai\""
+  echo 'approval_policy = "never"'
+  echo 'sandbox_mode = "danger-full-access"'
   echo "developer_instructions = \"$INSTRUCTIONS_ESCAPED\""
   if [ -n "$MODEL" ]; then
     echo "model = \"$MODEL_ESCAPED\""
@@ -726,6 +752,7 @@ else
   mv "$CONFIG_TMP" "$CONFIG_FILE"
   CONFIG_TMP=""
 fi
+
 
 save_eggai_api_key() {
   EGGAI_ENV_EXISTED=0

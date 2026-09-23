@@ -126,7 +126,13 @@ esac
     `#!/bin/sh
 printf '%s\n' "$*" >> "$FAKE_NPM_LOG"
 [ -z "\${FAKE_NPM_EXIT:-}" ] || exit "$FAKE_NPM_EXIT"
-sh "$FAKE_INSTALLER_SOURCE"
+case "\${1:-}" in
+  --version) echo 11.0.0 ;;
+  view) echo 9.9.9 ;;
+  list) printf '{"dependencies":{"@anthropic-ai/claude-code":{"version":"%s"}}}\n' "\${FAKE_INSTALLED_VERSION:-0.0.0}" ;;
+  install) sh "$FAKE_INSTALLER_SOURCE" ;;
+  *) exit 2 ;;
+esac
 `,
   );
   chmodSync(fakeNpm, 0o755);
@@ -199,8 +205,8 @@ test("Claude Code Shell dry-run delegates installation without changing configur
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
   expect(result.stdout).toContain("Claude Code installer dry run");
-  expect(result.stdout).toContain("Node.js requirement: >=24.18.0");
-  expect(result.stdout).toContain("Node.js automatic install source: https://nodejs.org/dist/latest-v24.x");
+  expect(result.stdout).toContain("Node.js requirement: working Node.js and npm");
+  expect(result.stdout).toContain("Node.js automatic install source if missing: nodejs.org current LTS release");
   expect(result.stdout).toContain("npm package: @anthropic-ai/claude-code@latest");
   expect(result.stdout).toContain("npm registry: https://registry.npmmirror.com");
   expect(result.stdout).toContain("Would install/update Claude Code: yes");
@@ -342,14 +348,13 @@ chmod +x "$HOME/.local/bin/claude"
   expect(installed.remainingTemporaryFiles).toEqual([]);
 });
 
-test("Claude Code Shell upgrades Node.js versions below 24.18.0", () => {
+test("Claude Code Shell keeps a working local Node.js and npm", () => {
   const outdated = runWithInstallerFixture("#!/bin/sh\nexit 0\n", false, [], undefined, {
     FAKE_NODE_VERSION: "24.17.9",
   });
 
-  expect(outdated.result.status).not.toBe(0);
-  expect(outdated.result.stdout).toContain("Installing Node.js 24.x from nodejs.org");
-  expect(outdated.npmCommands).toBe("");
+  expect(outdated.result.stdout).toContain("Using Node.js v24.17.9");
+  expect(outdated.result.stdout).not.toContain("Installing Node.js");
 });
 
 test("Claude Code uses the official npm package through the mainland registry", () => {
@@ -366,10 +371,19 @@ chmod +x "$HOME/.local/bin/claude"
 
   expect(installed.result.status, installed.result.stderr).toBe(0);
   expect(installed.result.stdout).toContain("Claude Code registry fixture");
-  expect(installed.npmCommands).toContain("install --global @anthropic-ai/claude-code@latest");
+  expect(installed.npmCommands).toContain("install --global @anthropic-ai/claude-code@9.9.9");
   expect(installed.npmCommands).toContain("--prefix");
   expect(installed.npmCommands).toContain("--registry https://registry.npmmirror.com");
   expect(installed.npmCommands).toContain("--include=optional --no-audit --no-fund");
+});
+
+test("Claude Code skips npm install when its local package is already current", () => {
+  const installed = runWithInstallerFixture("#!/bin/sh\nexit 91\n", true, [], undefined, {
+    FAKE_INSTALLED_VERSION: "9.9.9",
+  });
+  expect(installed.result.status, installed.result.stderr).toBe(0);
+  expect(installed.result.stdout).toContain("already up to date");
+  expect(installed.npmCommands).not.toContain("install --global");
 });
 
 test("Claude Code Shell EggAi mode preserves existing settings and creates a backup", () => {
@@ -535,7 +549,7 @@ for (const jsonEngine of ["node", "python3", "jq", "perl"] as const) {
     }[jsonEngine];
     const available = spawnSync(shell, ["-c", availabilityCommand], {
       encoding: "utf8",
-      env: { ...process.env, PATH: testPath },
+      env: { ...process.env, HOME: path.join(tmpdir(), "eggdoc-json-engine-probe"), PATH: testPath },
     });
     test.skip(available.status !== 0, `${jsonEngine} is not available in this environment`);
 

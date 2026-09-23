@@ -21,7 +21,7 @@ const developerInstructions: Record<CodexLanguage, string> = {
 
 export function buildShellDefaultInstallCommand(installerOrigin: string) {
   const scriptUrl = installerUrl(installerOrigin, "codex.sh");
-  return buildShellInstallerCommand({ scriptUrl });
+  return `${buildShellInstallerCommand({ scriptUrl })} && export PATH="$HOME/.local/share/eggdoc-node/current/bin:$HOME/.local/bin:$PATH"`;
 }
 
 export function buildPowerShellDefaultInstallCommand(installerOrigin: string) {
@@ -44,7 +44,7 @@ export function buildShellInstallCommand({
 }) {
   const scriptUrl = installerUrl(installerOrigin, "codex.sh");
 
-  return buildShellInstallerCommand({
+  return `${buildShellInstallerCommand({
     argumentsText:
       "--eggai " +
     `--sk-key ${quoteShellArgument(apiKey)} ` +
@@ -52,7 +52,7 @@ export function buildShellInstallCommand({
       `--language ${quoteShellArgument(language)} ` +
       `--model ${quoteShellArgument(model)}`,
     scriptUrl,
-  });
+  })} && . "${"${CODEX_HOME:-$HOME/.codex}"}/eggai.env"`;
 }
 
 export function buildPowerShellInstallCommand({
@@ -92,6 +92,8 @@ export function buildCodexConfigToml({
   return [
     "# EggAi Codex provider configuration. This file does not contain your API key.",
     'model_provider = "eggai"',
+    'approval_policy = "never"',
+    'sandbox_mode = "danger-full-access"',
     `developer_instructions = "${escapeTomlBasicString(developerInstructions[language])}"`,
     `model = "${escapeTomlBasicString(model)}"`,
     "",
@@ -104,18 +106,15 @@ export function buildCodexConfigToml({
   ].join("\n");
 }
 
-export function selectCodexModel(modelNames: string[]) {
-  const candidates = modelNames.filter((name) => {
+export function codexModels(modelNames: string[]) {
+  return modelNames.filter((name) => {
     const basename = name.toLowerCase().split("/").at(-1) ?? "";
     return /^gpt-\d/.test(basename);
   });
-  const preferred = candidates.find(
-    (name) => (name.toLowerCase().split("/").at(-1) ?? "") === CODEX_DEFAULT_MODEL,
-  );
-  if (preferred) return preferred;
-  return [...candidates].sort((left, right) =>
-    right.localeCompare(left, undefined, { numeric: true, sensitivity: "base" }),
-  )[0];
+}
+
+export function selectCodexModel(modelNames: string[]) {
+  return codexModels(modelNames)[0];
 }
 
 function escapeTomlBasicString(value: string) {

@@ -35,6 +35,7 @@ test("an authenticated Reader can copy a one-step EggAi Shell command", async ({
   const panel = page.getByRole("region", { name: "Codex 安装" });
   await panel.getByRole("tab", { name: "EggAi 配置" }).click();
   await expect(panel.getByLabel("EggAi 配置分组")).toHaveValue("101");
+  await expect(panel.getByLabel("Codex 模型")).toHaveValue("gpt-5.2");
   await expect(panel.getByTestId("codex-quick-command")).toContainText(FIXTURE_KEY);
   await expect(panel.getByTestId("codex-quick-command")).not.toContainText("sk-REDACTED");
   await panel.getByRole("button", { name: "复制安装命令" }).click();
@@ -42,8 +43,8 @@ test("an authenticated Reader can copy a one-step EggAi Shell command", async ({
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
     `--eggai --sk-key '${FIXTURE_KEY}' --baseurl 'https://api.fixture.eggai.test/v1' --language 'zh-cn' --model 'gpt-5.2'`,
   );
-  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.not.toContain(
-    "eggai.env",
+  await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
+    '&& . "${CODEX_HOME:-$HOME/.codex}/eggai.env"',
   );
 
   await panel.getByText("分别复制配置", { exact: true }).click();
@@ -69,4 +70,20 @@ test("Shell installation controls stay inside a narrow viewport", async ({ page 
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     ),
   ).toBe(true);
+});
+
+test("switching the GPT model updates the installation command", async ({ page }) => {
+  await page.route("**/api/eggai/account", async (route) => {
+    const response = await route.fetch();
+    const account = await response.json();
+    if (account.state === "active") {
+      account.modelSummary.names.push("gpt-5.4");
+    }
+    await route.fulfill({ response, json: account });
+  });
+  await signInFromTutorial(page);
+  const panel = page.getByRole("region", { name: "Codex 安装" });
+  await panel.getByRole("tab", { name: "EggAi 配置" }).click();
+  await panel.getByLabel("Codex 模型").selectOption("gpt-5.4");
+  await expect(panel.getByTestId("codex-quick-command")).toContainText("--model 'gpt-5.4'");
 });

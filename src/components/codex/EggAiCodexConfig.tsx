@@ -2,7 +2,6 @@ import {
   Check,
   ChevronDown,
   CircleAlert,
-  CircleCheck,
   Copy,
   Download,
   ExternalLink,
@@ -31,6 +30,7 @@ import {
   buildPowerShellInstallCommand,
   buildShellDefaultInstallCommand,
   buildShellInstallCommand,
+  codexModels,
   selectCodexModel,
 } from "@/lib/codex/configuration";
 
@@ -163,6 +163,7 @@ export function EggAiCodexConfig() {
   );
   const [platform, setPlatform] = useState<CodexPlatform>("unix");
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>();
+  const [selectedModel, setSelectedModel] = useState<string>();
 
   useEffect(() => {
     try {
@@ -197,10 +198,10 @@ export function EggAiCodexConfig() {
       : undefined;
   const apiKey = selectedCredential?.key ?? CONFIGURATION_PLACEHOLDER;
   const baseUrl = selectedCredential?.baseUrl ?? PUBLIC_EGGAI_BASE_URL;
-  const codexModel =
-    accountState.kind === "active"
-      ? selectCodexModel(accountState.modelSummary.names)
-      : undefined;
+  const availableModels = accountState.kind === "active" ? codexModels(accountState.modelSummary.names) : [];
+  const codexModel = availableModels.includes(selectedModel ?? "")
+    ? selectedModel
+    : selectCodexModel(availableModels);
   const commandModel = codexModel ?? CODEX_DEFAULT_MODEL;
   const codexConfigToml = buildCodexConfigToml({
     baseUrl,
@@ -269,14 +270,23 @@ export function EggAiCodexConfig() {
             ))}
           </select>
         </div>
-        <p className="inline-flex items-center gap-2 pb-2 text-sm text-muted-foreground">
-          {codexModel ? (
-            <CircleCheck aria-hidden="true" className="h-4 w-4 text-primary" />
-          ) : (
-            <CircleAlert aria-hidden="true" className="h-4 w-4 text-destructive" />
-          )}
-          {codexModel ? `模型 ${codexModel}` : "暂无可用 GPT 模型"}
-        </p>
+        {codexModel ? (
+          <div className="min-w-0">
+            <label className="text-sm font-medium" htmlFor="eggai-codex-model">Codex 模型</label>
+            <select
+              className="mt-2 h-10 w-full rounded-sm border border-border bg-background px-3 text-sm text-foreground"
+              id="eggai-codex-model"
+              onChange={(event) => setSelectedModel(event.target.value)}
+              value={codexModel}
+            >
+              {availableModels.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </div>
+        ) : (
+          <p className="inline-flex items-center gap-2 pb-2 text-sm text-destructive">
+            <CircleAlert aria-hidden="true" className="h-4 w-4" />暂无可用 GPT 模型
+          </p>
+        )}
       </div>
     );
   } else if (accountState.kind === "anonymous") {

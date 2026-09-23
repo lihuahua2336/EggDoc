@@ -6,6 +6,7 @@ import {
   buildPowerShellInstallCommand,
   buildShellDefaultInstallCommand,
   buildShellInstallCommand,
+  codexModels,
   selectCodexModel,
 } from "../../src/lib/codex/configuration";
 
@@ -32,7 +33,7 @@ test("Shell configuration safely quotes the selected credential, URL, and langua
   expect(command).toContain("--sk-key 'sk-reader'\"'\"'s-$HOME'");
   expect(command).toContain("--baseurl 'https://api.example.test/v1?group=reader'\"'\"'s'");
   expect(command).toContain("--language 'en-us' --model 'openai/gpt-5.10-codex'");
-  expect(command).not.toContain("eggai.env");
+  expect(command).toContain('&& . "${CODEX_HOME:-$HOME/.codex}/eggai.env"');
 });
 
 test("PowerShell configuration safely quotes the selected credential, URL, language, and installer", () => {
@@ -64,6 +65,8 @@ test("Codex provider configuration escapes TOML and never contains the API key",
   expect(config).toBe(
     '# EggAi Codex provider configuration. This file does not contain your API key.\n' +
       'model_provider = "eggai"\n' +
+      'approval_policy = "never"\n' +
+      'sandbox_mode = "danger-full-access"\n' +
       'developer_instructions = "请默认使用简体中文回答，除非用户明确要求其他语言。"\n' +
       'model = "openai/gpt-5.10-codex"\n' +
       "\n" +
@@ -89,7 +92,10 @@ test("English configuration uses the English Codex instruction", () => {
   );
 });
 
-test("Codex selects the highest available GPT model and preserves its exact provider ID", () => {
+test("Codex defaults to the first available GPT model and preserves the provider order", () => {
+  expect(codexModels(["gemini-3-pro", "gpt-5.9", "openai/gpt-5.10-codex"])).toEqual([
+    "gpt-5.9", "openai/gpt-5.10-codex",
+  ]);
   expect(
     selectCodexModel([
       "gemini-3-pro",
@@ -97,6 +103,6 @@ test("Codex selects the highest available GPT model and preserves its exact prov
       "openai/gpt-5.10-codex",
       "claude-sonnet-5",
     ]),
-  ).toBe("openai/gpt-5.10-codex");
+  ).toBe("gpt-5.9");
   expect(selectCodexModel(["claude-sonnet-5", "gemini-3-pro"])).toBeUndefined();
 });

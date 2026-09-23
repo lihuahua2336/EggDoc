@@ -5,12 +5,9 @@ umask 077
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
 NPM_PREFIX="$HOME/.local"
 NPM_PACKAGE="@anthropic-ai/claude-code"
-NODE_MINIMUM_VERSION=24.18.0
-NODE_MINIMUM_MAJOR=24
-NODE_MINIMUM_MINOR=18
-NODE_MINIMUM_PATCH=0
-NODE_RELEASE_LINE=24
-NODE_RELEASE_URL="https://nodejs.org/dist/latest-v${NODE_RELEASE_LINE}.x"
+NODE_INDEX_URL="https://nodejs.org/dist/index.tab"
+NODE_RELEASE_LINE=""
+NODE_RELEASE_URL=""
 NODE_INSTALL_ROOT="$HOME/.local/share/eggdoc-node"
 INSTALL_TARGET="${CLAUDE_CODE_VERSION:-latest}"
 DRY_RUN="${DRY_RUN:-0}"
@@ -97,11 +94,24 @@ node_runtime_is_usable() {
   case "$node_major:$node_minor:$node_patch" in
     :*|*::*|*:|*[!0-9:]*) return 1 ;;
   esac
-  [ "$node_major" -gt "$NODE_MINIMUM_MAJOR" ] && return 0
-  [ "$node_major" -lt "$NODE_MINIMUM_MAJOR" ] && return 1
-  [ "$node_minor" -gt "$NODE_MINIMUM_MINOR" ] && return 0
-  [ "$node_minor" -lt "$NODE_MINIMUM_MINOR" ] && return 1
-  [ "$node_patch" -ge "$NODE_MINIMUM_PATCH" ]
+  npm --version >/dev/null 2>&1
+}
+
+resolve_node_lts() {
+  node_index="$(mktemp "${TMPDIR:-/tmp}/eggdoc-node-index.XXXXXX")" || fail "could not create a Node.js metadata file."
+  if ! download_node_file "$NODE_INDEX_URL" "$node_index"; then
+    rm -f "$node_index"
+    fail "could not read the official Node.js release index."
+  fi
+  node_lts="$(awk -F '\t' 'NR == 1 { if ($1 != "version" || $10 != "lts") exit 2; next } $10 != "-" { print $1; exit }' "$node_index")" || :
+  rm -f "$node_index"
+  case "$node_lts" in
+    v[0-9]*.[0-9]*.[0-9]*) ;;
+    *) fail "the official Node.js release index did not contain a valid LTS version." ;;
+  esac
+  NODE_RELEASE_LINE="${node_lts#v}"
+  NODE_RELEASE_LINE="${NODE_RELEASE_LINE%%.*}"
+  NODE_RELEASE_URL="https://nodejs.org/dist/latest-v${NODE_RELEASE_LINE}.x"
 }
 
 node_archive_digest() {
@@ -200,11 +210,12 @@ ensure_node_runtime() {
   if node_runtime_is_usable; then
     echo "Using Node.js $(node --version)."
   else
+    resolve_node_lts
     echo "Installing Node.js ${NODE_RELEASE_LINE}.x from nodejs.org..."
     install_node_runtime || fail "automatic Node.js installation failed."
   fi
   activate_command_path
-  node_runtime_is_usable || fail "Node.js $NODE_MINIMUM_VERSION or newer and npm are required, but verification failed after installation."
+  node_runtime_is_usable || fail "Node.js and npm are required, but verification failed after installation."
 }
 
 valid_install_target() (
@@ -342,8 +353,8 @@ ANTHROPIC_BASE_URL="$(normalize_base_url "$BASE_URL")"
 if [ "$DRY_RUN" = "1" ]; then
   echo "Claude Code installer dry run"
   echo "Mode: $([ "$EGGAI_MODE" = "1" ] && echo eggai || echo default)"
-  echo "Node.js requirement: >=$NODE_MINIMUM_VERSION"
-  echo "Node.js automatic install source: $NODE_RELEASE_URL"
+  echo "Node.js requirement: working Node.js and npm"
+  echo "Node.js automatic install source if missing: nodejs.org current LTS release"
   echo "npm package: $NPM_PACKAGE@$INSTALL_TARGET"
   echo "npm registry: $NPM_REGISTRY"
   echo "Release: $INSTALL_TARGET"
@@ -526,7 +537,18 @@ NPM_CONFIG_REGISTRY="$NPM_REGISTRY"
 NPM_CONFIG_PREFIX="$NPM_PREFIX"
 export NPM_CONFIG_REGISTRY
 export NPM_CONFIG_PREFIX
-if npm install --global "$NPM_PACKAGE@$INSTALL_TARGET" \
+if [ "$INSTALL_TARGET" = "latest" ]; then
+  INSTALL_TARGET="$(npm view "$NPM_PACKAGE" version --registry "$NPM_REGISTRY" 2>/dev/null)" || \
+    fail "npm could not check the latest Claude Code version from $NPM_REGISTRY."
+  case "$INSTALL_TARGET" in
+    ''|*[!0-9A-Za-z.+-]*) fail "npm returned an invalid Claude Code version." ;;
+  esac
+fi
+INSTALLED_CLAUDE_VERSION="$(npm list --global "$NPM_PACKAGE" --depth=0 --json --prefix "$NPM_PREFIX" 2>/dev/null | \
+  node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{try{console.log(JSON.parse(s).dependencies?.["@anthropic-ai/claude-code"]?.version??"")}catch{console.log("")}})')" || :
+if [ "$INSTALLED_CLAUDE_VERSION" = "$INSTALL_TARGET" ]; then
+  echo "Claude Code $INSTALL_TARGET is already up to date."
+elif npm install --global "$NPM_PACKAGE@$INSTALL_TARGET" \
   --prefix "$NPM_PREFIX" --registry "$NPM_REGISTRY" \
   --include=optional --no-audit --no-fund; then
   :

@@ -82,6 +82,7 @@ function runWithInstallerFixture(
     runs?: number;
     signalAfterConfigWrite?: boolean;
     automaticNode?: boolean;
+    preinstallCodex?: boolean;
   } = {},
 ) {
   const root = mkdtempSync(path.join(tmpdir(), "eggdoc-codex-shell-"));
@@ -94,6 +95,13 @@ function runWithInstallerFixture(
   mkdirSync(bin);
   mkdirSync(home);
   mkdirSync(temporaryFiles);
+  if (options.preinstallCodex) {
+    const codexBin = path.join(home, ".local", "bin");
+    mkdirSync(codexBin, { recursive: true });
+    const codex = path.join(codexBin, "codex");
+    writeFileSync(codex, "#!/bin/sh\necho 'codex-cli 9.9.9'\n");
+    chmodSync(codex, 0o755);
+  }
   writeFileSync(fixture, installerSource);
   let nodeChecksums: string | undefined;
   let nodeArchive: string | undefined;
@@ -105,7 +113,7 @@ function runWithInstallerFixture(
     const nodeRuntime = path.join(releaseBin, "node");
     const npmRuntime = path.join(releaseBin, "npm");
     writeFileSync(nodeRuntime, "#!/bin/sh\ncase \"$1\" in --version) echo v24.18.0 ;; *) exit 64 ;; esac\n");
-    writeFileSync(npmRuntime, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FAKE_NPM_LOG\"\nsh \"$FAKE_INSTALLER_SOURCE\"\n");
+    writeFileSync(npmRuntime, "#!/bin/sh\nexec \"$FAKE_NPM_COMMAND\" \"$@\"\n");
     chmodSync(nodeRuntime, 0o755);
     chmodSync(npmRuntime, 0o755);
     nodeArchive = path.join(root, `${releaseName}.tar.gz`);
@@ -155,6 +163,7 @@ done
 [ "\${url%/responses}" = "$url" ] || { printf '%s' "\${FAKE_RESPONSES_STATUS:-200}"; exit 0; }
 [ -n "$output" ] || exit 2
 case "$url" in
+  */index.tab) printf 'version\tdate\tfiles\tnpm\tv8\tuv\tzlib\topenssl\tmodules\tlts\tsecurity\nv24.18.0\t2026-09-01\tlinux-x64\t11\t1\t1\t1\t1\t1\tKrypton\t-\n' > "$output" ;;
   */SHASUMS256.txt) cat "$FAKE_NODE_CHECKSUMS" > "$output" ;;
   *.tar.gz) cat "$FAKE_NODE_ARCHIVE" > "$output" ;;
   *) exit 2 ;;
@@ -177,8 +186,8 @@ esac
     fakeNode,
     `#!/bin/sh
 case "\${1:-}" in
-  --version) printf 'v%s\n' "\${FAKE_NODE_VERSION:-24.18.0}" ;;
-  *) exit 64 ;;
+  --version) [ "\${FAKE_NODE_UNAVAILABLE:-0}" = 0 ] || exit 1; printf 'v%s\n' "\${FAKE_NODE_VERSION:-24.18.0}" ;;
+  *) exec "$REAL_NODE_COMMAND" "$@" ;;
 esac
 `,
   );
@@ -189,8 +198,13 @@ esac
     fakeNpm,
     `#!/bin/sh
 printf '%s\n' "$*" >> "$FAKE_NPM_LOG"
-[ -z "\${FAKE_NPM_EXIT:-}" ] || exit "$FAKE_NPM_EXIT"
-sh "$FAKE_INSTALLER_SOURCE"
+case "\${1:-}" in
+  --version) echo 11.0.0 ;;
+  view) echo 9.9.9 ;;
+  list) printf '{"dependencies":{"@openai/codex":{"version":"%s"}}}\n' "\${FAKE_INSTALLED_VERSION:-0.0.0}" ;;
+  install) [ -z "\${FAKE_NPM_EXIT:-}" ] || exit "$FAKE_NPM_EXIT"; sh "$FAKE_INSTALLER_SOURCE" ;;
+  *) exit 2 ;;
+esac
 `,
   );
   chmodSync(fakeNpm, 0o755);
@@ -233,9 +247,11 @@ exit "$status"
           FAKE_CODEX_LOG: shellPath(codexLog),
           FAKE_INSTALLER_SOURCE: shellPath(fixture),
           FAKE_NPM_LOG: shellPath(npmLog),
+          FAKE_NPM_COMMAND: shellPath(path.join(bin, "npm")),
           FAKE_NODE_ARCHIVE: nodeArchive ? shellPath(nodeArchive) : undefined,
           FAKE_NODE_CHECKSUMS: nodeChecksums ? shellPath(nodeChecksums) : undefined,
-          FAKE_NODE_VERSION: options.automaticNode ? "24.17.9" : "24.18.0",
+          FAKE_NODE_UNAVAILABLE: options.automaticNode ? "1" : "0",
+          REAL_NODE_COMMAND: shellPath(process.execPath),
           FAKE_SIGNAL_CONFIG_PATH: options.signalAfterConfigWrite
             ? shellPath(configPath)
             : undefined,
@@ -327,7 +343,7 @@ test("default installation verifies official Node.js before npm when Node is too
   expect(installed.result.status, installed.result.stderr).toBe(0);
   expect(installed.result.stdout).toContain("Installing Node.js 24.x from nodejs.org");
   expect(installed.result.stdout).toContain("Done: Codex is installed");
-  expect(installed.npmCommands).toContain("install --global @openai/codex@latest");
+  expect(installed.npmCommands).toContain("install --global @openai/codex@9.9.9");
   expect(installed.profile).toContain(".local/share/eggdoc-node/current/bin");
 });
 
@@ -336,10 +352,20 @@ test("Codex is installed from the official npm package through the mainland regi
 
   expect(installed.result.status, installed.result.stderr).toBe(0);
   expect(installed.result.stdout).toContain("Done: Codex is installed");
-  expect(installed.npmCommands).toContain("install --global @openai/codex@latest");
+  expect(installed.npmCommands).toContain("install --global @openai/codex@9.9.9");
   expect(installed.npmCommands).toContain("--prefix");
   expect(installed.npmCommands).toContain("--registry https://registry.npmmirror.com");
   expect(installed.npmCommands).toContain("--include=optional --no-audit --no-fund");
+});
+
+test("Codex skips npm install when its local package is already current", () => {
+  const installed = runWithInstallerFixture("#!/bin/sh\nexit 91\n", {
+    preinstallCodex: true,
+    extraEnv: { FAKE_INSTALLED_VERSION: "9.9.9" },
+  });
+  expect(installed.result.status, installed.result.stderr).toBe(0);
+  expect(installed.result.stdout).toContain("already up to date");
+  expect(installed.npmCommands).not.toContain("install --global");
 });
 
 test("default installation preserves an npm subprocess failure", () => {
@@ -460,6 +486,46 @@ test("EggAi installation preserves existing configuration and is idempotent", ()
   expect(configured.config?.match(/^\[model_providers\.eggai\]$/gm)).toHaveLength(1);
 });
 
+test("EggAi configuration preserves unrelated TOML tables and arrays of tables", () => {
+  const initialConfig = [
+    '"model" = "original"',
+    'default_permissions = ":workspace"',
+    'approval_policy = "on-request"',
+    'model_reasoning_effort = "medium"',
+    '',
+    '[mcp_servers."keep.server"]',
+    'command = "keep-command"',
+    '',
+    '[[hooks.after_agent]]',
+    'command = "keep-hook"',
+    '',
+    '["model_providers"."eggai"]',
+    'base_url = "https://old.example/v1"',
+    '',
+    '[model_providers.eggai.http_headers]',
+    'x-old = "remove"',
+    '',
+    '[model_providers.other]',
+    'base_url = "https://other.example/v1"',
+    '',
+  ].join("\n");
+  const configured = runWithInstallerFixture(successfulInstaller, {
+    args: ["--eggai", "--sk-key", "sk-EDGE", "--model", "gpt-5.2"],
+    initialConfig,
+  });
+  expect(configured.result.status).toBe(0);
+  expect(configured.config).toContain('model_reasoning_effort = "medium"');
+  expect(configured.config).toContain('[mcp_servers."keep.server"]');
+  expect(configured.config).toContain('[[hooks.after_agent]]');
+  expect(configured.config).toContain('[model_providers.other]');
+  expect(configured.config).not.toContain('x-old = "remove"');
+  expect(configured.config).not.toContain('"model" = "original"');
+  expect(configured.config).toContain('approval_policy = "never"');
+  expect(configured.config).toContain('sandbox_mode = "danger-full-access"');
+  expect(configured.config).not.toContain('default_permissions = ":workspace"');
+  expect(configured.config).not.toContain('["model_providers"."eggai"]');
+});
+
 test("EggAi installation restores existing configuration when API key persistence fails", () => {
   const fixtureKey = "sk-EGGDOC-SHELL-ROLLBACK-FIXTURE";
   const initialConfig = 'model = "keep-before-failed-env-save"\n';
@@ -547,11 +613,11 @@ test("default dry-run installs Codex without changing provider configuration", (
 
   expect(result.status).toBe(0);
   expect(result.stdout).toContain("Mode: default");
-  expect(result.stdout).toContain("Node.js requirement: >=24.18.0");
-  expect(result.stdout).toContain("Node.js automatic install source: https://nodejs.org/dist/latest-v24.x");
+  expect(result.stdout).toContain("Node.js requirement: working Node.js and npm");
+  expect(result.stdout).toContain("Node.js automatic install source if missing: nodejs.org current LTS release");
   expect(result.stdout).toContain("npm package: @openai/codex@latest");
   expect(result.stdout).toContain("npm registry: https://registry.npmmirror.com");
-  expect(result.stdout).toContain("Would install/update Codex: yes");
+  expect(result.stdout).toContain("Would install Codex if missing or update it if an npm newer version exists: yes");
   expect(result.stdout).toContain("Would write config.toml: no");
   expect(result.stdout).toContain("Would change existing Codex login: no");
   expect(result.stdout).not.toContain("model_provider");
@@ -598,7 +664,7 @@ test("EggAi dry-run accepts generated parameters, redacts the key, and previews 
   expect(result.stdout).not.toContain(fixtureKey);
   expect(result.stdout).toContain('base_url = "https://api.example.test/v1"');
   expect(result.stdout).toContain("Respond in English by default");
-  expect(result.stdout).toContain("Would install/update Codex: yes");
+  expect(result.stdout).toContain("Would install Codex if missing or update it if an npm newer version exists: yes");
   expect(result.stdout).toContain("Would save EGGAI_API_KEY for provider-scoped authentication: yes");
   expect(result.stdout).toContain("Would change existing Codex login: no");
   expect(result.stdout).toContain('model = "gpt-5.6-sol"');

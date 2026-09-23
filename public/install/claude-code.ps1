@@ -17,7 +17,6 @@ $ErrorActionPreference = "Stop"
 
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY } else { "https://registry.npmmirror.com" }
 $NpmPackage = "@anthropic-ai/claude-code"
-$NodeMinimumVersion = [Version]"24.18.0"
 $NodeWingetPackageId = "OpenJS.NodeJS.LTS"
 $WingetNoApplicableUpgradeExitCode = 0x8A15002B
 $SupportedEggAiModels = @(
@@ -99,6 +98,9 @@ function Get-NodeRuntime {
     $global:LASTEXITCODE = 0
     $versionOutput = & $nodeSource --version
     if ($LASTEXITCODE -ne 0) { return $null }
+    $global:LASTEXITCODE = 0
+    & $npmSource --version | Out-Null
+    if ($LASTEXITCODE -ne 0) { return $null }
     $version = ($versionOutput -join "").Trim()
     $versionNumber = $null
     if (-not [Version]::TryParse($version.TrimStart([char]'v'), [ref]$versionNumber)) { return $null }
@@ -131,7 +133,7 @@ function Update-ProcessPath {
 function Install-NodeRuntime {
   $wingetCommand = Get-Command winget -ErrorAction SilentlyContinue
   if (-not $wingetCommand) {
-    Throw-InstallError "Node.js $NodeMinimumVersion or newer is required, and winget is unavailable. Install the official Node.js LTS release and retry."
+    Throw-InstallError "Node.js and npm.cmd are required, and winget is unavailable. Install the official Node.js LTS release and retry."
   }
 
   Write-Host "Installing Node.js LTS with winget..."
@@ -157,20 +159,16 @@ function Install-NodeRuntime {
 
 function Ensure-NodeRuntime {
   $runtime = Get-NodeRuntime
-  if ($runtime -and $runtime.VersionNumber -ge $NodeMinimumVersion) {
+  if ($runtime) {
     Write-Host "Using Node.js $($runtime.Version)."
     return $runtime
   }
 
-  if ($runtime) {
-    Write-Host "Node.js $($runtime.Version) is older than the required version $NodeMinimumVersion."
-  } else {
-    Write-Host "Node.js $NodeMinimumVersion or newer was not found."
-  }
+  Write-Host "Node.js or npm.cmd was not found."
   Install-NodeRuntime
   $runtime = Get-NodeRuntime -PreferredDirectory $OfficialNodeDirectory
-  if (-not $runtime -or $runtime.VersionNumber -lt $NodeMinimumVersion) {
-    Throw-InstallError "Node.js $NodeMinimumVersion or newer and npm.cmd are required, but verification failed after winget installation. Restart PowerShell and retry."
+  if (-not $runtime) {
+    Throw-InstallError "Node.js and npm.cmd are required, but verification failed after winget installation. Restart PowerShell and retry."
   }
   Write-Host "Using Node.js $($runtime.Version)."
   return $runtime
@@ -423,7 +421,7 @@ $settingsFile = Join-Path $claudeHome "settings.json"
 if ($DryRun) {
   Write-Host "Claude Code installer dry run"
   Write-Host "Mode: $(if ($EggAiMode) { 'eggai' } else { 'default' })"
-  Write-Host "Node.js requirement: >=$NodeMinimumVersion"
+  Write-Host "Node.js requirement: working Node.js and npm.cmd"
   Write-Host "Node.js automatic install: winget $NodeWingetPackageId"
   Write-Host "npm package: $NpmPackage@$Version"
   Write-Host "npm registry: $NpmRegistry"
@@ -512,17 +510,39 @@ Write-Host "Installing or updating Claude Code from npm..."
 $previousNpmRegistry = $env:NPM_CONFIG_REGISTRY
 try {
   $env:NPM_CONFIG_REGISTRY = $NpmRegistry
+  $installVersion = $Version
+  if ($Version -eq "latest") {
+    $global:LASTEXITCODE = 0
+    $installVersion = ((& $nodeRuntime.NpmCommand view $NpmPackage version --registry $NpmRegistry) -join "").Trim()
+    if ($LASTEXITCODE -ne 0 -or $installVersion -notmatch '^[0-9][A-Za-z0-9.+-]*$') {
+      Throw-InstallError "npm could not check the latest Claude Code version from $NpmRegistry."
+    }
+  }
   $global:LASTEXITCODE = 0
-  & $nodeRuntime.NpmCommand install `
-    --global `
-    "$NpmPackage@$Version" `
-    --registry $NpmRegistry `
-    --include=optional `
-    --no-audit `
-    --no-fund
-  $npmExitCode = $LASTEXITCODE
-  if ($npmExitCode -ne 0) {
-    Throw-InstallError "npm could not install $NpmPackage from $NpmRegistry (exit code $npmExitCode)."
+  $installedJson = (& $nodeRuntime.NpmCommand list --global $NpmPackage --depth=0 --json) -join ""
+  $installedVersion = $null
+  if ($LASTEXITCODE -eq 0) {
+    try {
+      $installedVersion = ($installedJson | ConvertFrom-Json).dependencies.'@anthropic-ai/claude-code'.version
+    } catch {
+      $installedVersion = $null
+    }
+  }
+  if ($installedVersion -eq $installVersion) {
+    Write-Host "Claude Code $installVersion is already up to date."
+  } else {
+    $global:LASTEXITCODE = 0
+    & $nodeRuntime.NpmCommand install `
+      --global `
+      "$NpmPackage@$installVersion" `
+      --registry $NpmRegistry `
+      --include=optional `
+      --no-audit `
+      --no-fund
+    $npmExitCode = $LASTEXITCODE
+    if ($npmExitCode -ne 0) {
+      Throw-InstallError "npm could not install $NpmPackage from $NpmRegistry (exit code $npmExitCode)."
+    }
   }
 } finally {
   if ($null -eq $previousNpmRegistry) {

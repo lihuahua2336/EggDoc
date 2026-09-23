@@ -14,6 +14,8 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+test.skip(process.platform !== "win32", "requires Windows PowerShell and AppX APIs");
+
 import {
   buildPowerShellDefaultInstallCommand,
   buildPowerShellInstallCommand,
@@ -479,8 +481,8 @@ test("EggAi installation leaves the original config intact when atomic replaceme
 test("EggAi installation preserves existing configuration and is idempotent", () => {
   const fixtureKey = "sk-EGGDOC-POWERSHELL-IDEMPOTENT-FIXTURE";
   const initialConfig =
-    'model = "keep-me"\r\n\r\n[mcp_servers.keep]\r\ncommand = "keep-command"\r\n\r\n' +
-    '[model_providers."eggai"] # replace this provider\r\n' +
+    '"model" = "keep-me"\r\ndefault_permissions = ":workspace"\r\n\r\n[mcp_servers.keep]\r\ncommand = "keep-command"\r\n\r\n' +
+    '["model_providers"."eggai"] # replace this provider\r\n' +
     'base_url = "https://old.example.test/v1"\r\n\r\n' +
     '[model_providers.eggai.auth]\r\ntype = "bearer"\r\n\r\n' +
     '[model_providers.eggai.http_headers]\r\nx-old = "remove"\r\n\r\n' +
@@ -499,9 +501,12 @@ test("EggAi installation preserves existing configuration and is idempotent", ()
   expect(configured.backups).toEqual([initialConfig, undefined]);
   expect(configured.backup).toBeUndefined();
   expect(configured.config).toContain('model = "gpt-5.6-sol"');
-  expect(configured.config).not.toContain('model = "keep-me"');
+  expect(configured.config).not.toContain('"model" = "keep-me"');
+  expect(configured.config).toContain('approval_policy = "never"');
+  expect(configured.config).toContain('sandbox_mode = "danger-full-access"');
+  expect(configured.config).not.toContain('default_permissions = ":workspace"');
   expect(configured.config).toContain('[mcp_servers.keep]');
-  expect(configured.config).not.toContain('[model_providers."eggai"]');
+  expect(configured.config).not.toContain('["model_providers"."eggai"]');
   expect(configured.config).not.toContain("https://old.example.test/v1");
   expect(configured.config).not.toContain("model_providers.eggai.auth");
   expect(configured.config).not.toContain("model_providers.eggai.http_headers");
