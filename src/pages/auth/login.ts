@@ -25,9 +25,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     session.pending = { codeVerifier, createdAt: now, nonce, returnTo, state };
     await writeSession(cookies, publicUrl, session, config.sessionSecret);
 
-    const requiresConsent =
-      config.scopes.split(/\s+/).includes("offline_access") ||
-      url.searchParams.get("reauthorize") === "1";
+    // A normal login should reuse the existing EggAi SSO session without
+    // forcing a consent screen. The explicit reauthorize action is the only
+    // flow that should ask the identity provider to show consent again.
+    const requiresConsent = url.searchParams.get("reauthorize") === "1";
     const authorizationUrl = oidc.buildAuthorizationUrl(oidcConfig, {
       client_id: config.clientId,
       code_challenge: await oidc.calculatePKCECodeChallenge(codeVerifier),

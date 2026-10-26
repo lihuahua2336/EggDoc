@@ -322,7 +322,7 @@ OIDC Client Secret、EggDoc Session Secret 和 EggAi 服务端配置不进入 Gi
 VPS 首次部署时克隆公开仓库、创建 `.env` 并填写生产值，其中镜像地址使用：
 
 ```dotenv
-EGGDOC_IMAGE=ghcr.io/lihuahua2336/eggdoc:1.6.3
+EGGDOC_IMAGE=ghcr.io/lihuahua2336/eggdoc:1.6.4
 ```
 
 以后部署或升级只需运行：

@@ -28,6 +28,8 @@ const authMessages = {
   unavailable: "登录服务暂时不可用，当前页面仍可公开阅读。",
 } as const;
 
+const AUTO_LOGIN_ATTEMPT_KEY = "eggdoc:embedded-auto-login-attempt";
+
 function getReturnTo() {
   const current = new URL(window.location.href);
   current.searchParams.delete("auth_error");
@@ -36,6 +38,19 @@ function getReturnTo() {
 
 function getLoginHref(returnTo: string, reauthorize = false) {
   return `/auth/login?returnTo=${encodeURIComponent(returnTo)}${reauthorize ? "&reauthorize=1" : ""}`;
+}
+
+function isEmbeddedPage() {
+  return new URL(window.location.href).searchParams.get("ui_mode") === "embedded";
+}
+
+function shouldStartEmbeddedLogin() {
+  if (!isEmbeddedPage()) return false;
+  const current = new URL(window.location.href);
+  if (current.searchParams.has("auth_error")) return false;
+  if (sessionStorage.getItem(AUTO_LOGIN_ATTEMPT_KEY) === current.pathname) return false;
+  sessionStorage.setItem(AUTO_LOGIN_ATTEMPT_KEY, current.pathname);
+  return true;
 }
 
 export function AuthStatus({ layout = "header", onAction }: AuthStatusProps) {
@@ -59,6 +74,7 @@ export function AuthStatus({ layout = "header", onAction }: AuthStatusProps) {
       .then(async (response) => {
         const data = await response.json();
         if (data.authenticated) {
+          sessionStorage.removeItem(AUTO_LOGIN_ATTEMPT_KEY);
           setState({
             eggAiPlatformUrl: data.eggAiPlatformUrl,
             kind: "authenticated",
@@ -66,10 +82,18 @@ export function AuthStatus({ layout = "header", onAction }: AuthStatusProps) {
           });
         } else if (data.reauthorizationRequired) {
           setState({ kind: "reauthorization-required" });
+          if (shouldStartEmbeddedLogin()) {
+            window.location.assign(getLoginHref(getReturnTo()));
+          }
         } else if (data.unavailable) {
           setState({ kind: "unavailable" });
         } else {
           setState({ kind: "anonymous" });
+          if (shouldStartEmbeddedLogin()) {
+            // Keep the navigation inside the iframe. If EggAi already has an
+            // SSO session, the OIDC flow returns without showing a login page.
+            window.location.assign(getLoginHref(getReturnTo()));
+          }
         }
       })
       .catch((error) => {

@@ -22,7 +22,7 @@ test("an anonymous Reader starts a PKCE EggAi login with a safe source page", as
   expect(location.searchParams.get("scope")).toContain("ecosystem:me");
   expect(location.searchParams.get("scope")).toContain("ecosystem:models:read");
   expect(location.searchParams.get("scope")).toContain("ecosystem:tokens:read");
-  expect(location.searchParams.get("prompt")).toBe("consent");
+  expect(location.searchParams.get("prompt")).toBeNull();
 
   const cookie = response.headers()["set-cookie"];
   expect(cookie).toContain("HttpOnly");
