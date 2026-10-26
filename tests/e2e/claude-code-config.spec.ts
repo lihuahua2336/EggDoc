@@ -60,13 +60,13 @@ test("Claude Code uses the first EggAi credential and can switch configuration g
   const panel = page.getByRole("region", { name: "Claude Code 安装" });
   const selector = panel.getByLabel("EggAi 配置分组");
   await expect(selector).toHaveValue("101");
-  await expect(selector).toContainText("默认 · Codex primary · default");
+  await expect(selector).toContainText("默认 · Codex primary · 1");
 
   await panel.getByRole("button", { name: "macOS / Linux / WSL" }).click();
   await selector.selectOption("202");
   await expect(panel.getByTestId("claude-code-quick-command")).toContainText(SECONDARY_KEY);
   await expect(panel.getByTestId("claude-code-quick-command")).toContainText(
-    "https://edge.fixture.eggai.test",
+    "https://api.eggai.icu",
   );
   await expect(panel.getByTestId("claude-code-quick-command")).toContainText(
     "--model 'claude-opus-5'",

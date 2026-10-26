@@ -18,7 +18,7 @@ const responseOptions = {
   },
 };
 
-function json(body: EggAiApiAccountResponse, status = 200) {
+function json(body: EggAiApiAccountResponse & { reason?: string }, status = 200) {
   return Response.json(body, { ...responseOptions, status });
 }
 
@@ -40,6 +40,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     ecosystemUrl,
     current.authorization.accessToken,
   );
+  if (account.kind === "access-denied") {
+    if (account.reason === "ecosystem_identity_not_linked") {
+      return json({ activationUrl: config.eggAiPlatformUrl.href, state: "inactive" });
+    }
+    return json({ state: "temporary-error", reason: account.reason }, 403);
+  }
   if (account.kind === "authorization-expired") {
     clearSession(cookies, publicUrl);
     return json({ state: "reauthorization-required" }, 401);
@@ -54,6 +60,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       current.authorization.accessToken,
       PUBLIC_EGGAI_BASE_URL,
     );
+    if (configuration.kind === "access-denied") {
+      return json({ state: "temporary-error", reason: configuration.reason }, 403);
+    }
     if (configuration.kind === "authorization-expired") {
       clearSession(cookies, publicUrl);
       return json({ state: "reauthorization-required" }, 401);

@@ -41,7 +41,7 @@ test("an authenticated Reader can copy a one-step EggAi Shell command", async ({
   await panel.getByRole("button", { name: "复制安装命令" }).click();
   await expect(panel.getByRole("button", { name: "安装命令已复制" })).toBeVisible();
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
-    `--eggai --sk-key '${FIXTURE_KEY}' --baseurl 'https://api.fixture.eggai.test/v1' --language 'zh-cn' --model 'gpt-5.2'`,
+    `--eggai --sk-key '${FIXTURE_KEY}' --baseurl 'https://api.eggai.icu/v1' --language 'zh-cn' --model 'gpt-5.2'`,
   );
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
     '&& . "${CODEX_HOME:-$HOME/.codex}/eggai.env"',

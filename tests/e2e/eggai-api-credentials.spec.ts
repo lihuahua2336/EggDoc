@@ -18,6 +18,41 @@ test.afterEach(async ({ request }) => {
   await setEcosystemMode(request, "active");
 });
 
+for (const [mode, reason] of [
+  ["client-not-allowed", "ecosystem_client_not_allowed"],
+  ["missing-scope", "insufficient_scope"],
+] as const) {
+  test(`${mode} preserves login and reports the upstream permission reason`, async ({ page, request }) => {
+    await setEcosystemMode(request, mode);
+    await signInFromTutorial(page);
+    const response = await page.request.get("/api/eggai/account");
+    expect(response.status()).toBe(403);
+    await expect(response.json()).resolves.toEqual({ state: "temporary-error", reason });
+    const identity = await page.request.get("/api/auth/user");
+    expect((await identity.json()).authenticated).toBe(true);
+  });
+}
+
+test("an unlinked Sub2API identity can activate without losing its EggDoc login", async ({ page, request }) => {
+  await setEcosystemMode(request, "identity-not-linked");
+  await signInFromTutorial(page);
+  const response = await page.request.get("/api/eggai/account");
+  expect(response.status()).toBe(200);
+  expect((await response.json()).state).toBe("inactive");
+  const identity = await page.request.get("/api/auth/user");
+  expect((await identity.json()).authenticated).toBe(true);
+});
+
+test("Sub2API key pagination includes credentials beyond the first page", async ({ page, request }) => {
+  await setEcosystemMode(request, "paginated-keys");
+  await signInFromTutorial(page);
+  const response = await page.request.get("/api/eggai/account");
+  expect(response.status()).toBe(200);
+  const account = await response.json();
+  expect(account.state).toBe("active");
+  expect(account.credentials.map((credential: { id: string }) => credential.id)).toEqual(["101", "202"]);
+});
+
 test("an active EggAi API Account receives credentials in a private response", async ({ page }) => {
   await signInFromTutorial(page);
   const response = await page.request.get("/api/eggai/account");
@@ -27,8 +62,8 @@ test("an active EggAi API Account receives credentials in a private response", a
     activationUrl: "https://api.eggai.icu/",
     credentials: [
       {
-        baseUrl: "https://api.fixture.eggai.test/v1",
-        group: "default",
+        baseUrl: "https://api.eggai.icu/v1",
+        group: "1",
         id: "101",
         key: SINGLE_KEY,
         name: "Codex primary",
@@ -65,7 +100,7 @@ test("the first credential is default and another configuration group can be sel
   const panel = page.getByRole("region", { name: "Codex 安装" });
   const selector = panel.getByLabel("EggAi 配置分组");
   await expect(selector).toHaveValue("101");
-  await expect(selector).toContainText("默认 · Codex primary · default");
+  await expect(selector).toContainText("默认 · Codex primary · 1");
   await selector.selectOption("202");
   await expect(selector).toHaveValue("202");
   await expect(panel.getByTestId("codex-quick-command")).toContainText(SECONDARY_KEY);
@@ -74,7 +109,7 @@ test("the first credential is default and another configuration group can be sel
   await expect(panel.getByRole("button", { name: "安装命令已复制" })).toBeVisible();
   const copiedCommand = page.evaluate(() => navigator.clipboard.readText());
   await expect(copiedCommand).resolves.toContain(SECONDARY_KEY);
-  await expect(copiedCommand).resolves.toContain("https://edge.fixture.eggai.test/v1");
+  await expect(copiedCommand).resolves.toContain("https://api.eggai.icu/v1");
 
   const persistentValues = await page.evaluate(() => Object.values(localStorage).join("\n"));
   expect(persistentValues).not.toContain("sk-EGGDOC");

@@ -126,14 +126,14 @@ Copy-Item .env.example .env.local
 node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 ```
 
-将输出写入 `.env.local` 的 `EGGDOC_SESSION_SECRET`，再填写专用于 EggDoc 的 Logto 应用信息。真实联调步骤见 [`docs/tutorials/localhost-real-eggai-acceptance.md`](docs/tutorials/localhost-real-eggai-acceptance.md)。不要提交 `.env.local` 或任何真实凭据。
+将输出写入 `.env.local` 的 `EGGDOC_SESSION_SECRET`，再填写专用于 EggDoc 的 Logto 应用信息。完整 `.env` 示例、Sub2API 白名单配置、401/403 排查和 Docker 更新步骤见 [EggDoc + Sub2API 配置与排障手册](docs/tutorials/eggdoc-sub2api-oidc-runbook.md)；本地真实联调步骤见 [`docs/tutorials/localhost-real-eggai-acceptance.md`](docs/tutorials/localhost-real-eggai-acceptance.md)。不要提交 `.env.local` 或任何真实凭据。
 
 ## 环境变量
 
 | 变量 | 可见性 | 用途 |
 | --- | --- | --- |
 | `EGGDOC_SITE_URL` | 服务端及构建期 | 对外 HTTPS Origin，用于 canonical URL、OIDC 回调和安全 Cookie |
-| `EGGDOC_IMAGE` | Compose | VPS 拉取的公开 GHCR 镜像，例如 `ghcr.io/owner/eggdoc:1.4` |
+| `EGGDOC_IMAGE` | VPS Compose 覆盖配置 | 使用 `compose.vps.yaml` 时拉取的 GHCR 镜像；本地 `compose.yaml` 从源码构建 `eggdoc:local`，不通过此变量选镜像 |
 | `EGGDOC_OIDC_ISSUER` | 服务端 | Logto OIDC Issuer URL |
 | `EGGDOC_OIDC_CLIENT_ID` | 服务端 | EggDoc 专用 OIDC Client ID |
 | `EGGDOC_OIDC_CLIENT_SECRET` | 服务端，可选 | Confidential Client 的密钥 |
@@ -311,7 +311,7 @@ Cloudflare 配置见 [`wrangler.toml`](wrangler.toml)；`[env.test.vars]` 只用
 
 ### GitHub 与 VPS 自动发布
 
-推送到 `main` 或 `v*` Tag 时，[`publish-container.yml`](.github/workflows/publish-container.yml) 会先扫描 Git 历史中的密钥，再构建 `linux/amd64`、`linux/arm64` 镜像并发布到 GitHub Container Registry。Workflow 使用固定版本的第三方 Action，并且只接收三个公开的 Repository Variables：
+发布 GitHub Release 时，[`publish-container.yml`](.github/workflows/publish-container.yml) 会扫描 Git 历史中的密钥并运行测试，通过后构建 `linux/amd64`、`linux/arm64` 镜像并发布到 GitHub Container Registry。仅推送 `main` 或 Tag 不会触发该镜像发布；手动运行 Workflow 只发布 `manual` 和 SHA 标签，不更新稳定版 `latest`。Workflow 使用固定版本的第三方 Action，并且只接收三个公开的 Repository Variables：
 
 - `EGGDOC_SITE_URL`
 - `PUBLIC_EGGAI_BASE_URL`
@@ -322,7 +322,7 @@ OIDC Client Secret、EggDoc Session Secret 和 EggAi 服务端配置不进入 Gi
 VPS 首次部署时克隆公开仓库、创建 `.env` 并填写生产值，其中镜像地址使用：
 
 ```dotenv
-EGGDOC_IMAGE=ghcr.io/lihuahua2336/eggdoc:1.1
+EGGDOC_IMAGE=ghcr.io/lihuahua2336/eggdoc:1.6.3
 ```
 
 以后部署或升级只需运行：

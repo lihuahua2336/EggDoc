@@ -1,5 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const testPort = Number(process.env.EGGDOC_TEST_PORT ?? 4322);
+if (!Number.isInteger(testPort) || testPort < 1 || testPort > 65535) {
+  throw new Error("EGGDOC_TEST_PORT must be a valid TCP port");
+}
+const testOrigin = `http://127.0.0.1:${testPort}`;
+
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
@@ -8,7 +14,7 @@ export default defineConfig({
   reporter: "list",
   workers: 1,
   use: {
-    baseURL: "http://127.0.0.1:4322",
+    baseURL: testOrigin,
     trace: "on-first-retry",
   },
   webServer: [
@@ -19,7 +25,7 @@ export default defineConfig({
     },
     {
       command: "node tests/fixtures/start-preview.mjs",
-      url: "http://127.0.0.1:4322/eggai/codex-installer/",
+      url: `${testOrigin}/eggai/codex-installer/`,
       reuseExistingServer: false,
     },
   ],

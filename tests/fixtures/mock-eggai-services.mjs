@@ -117,7 +117,7 @@ const server = createServer((request, response) => {
     return;
   }
 
-  if (url.pathname === "/api/ecosystem/me") {
+  if (url.pathname === "/api/ecosystem/me" || url.pathname === "/api/v1/ecosystem/me") {
     ecosystem.accountRequestCount += 1;
     if (!request.headers.authorization?.startsWith("Bearer fixture-access-token")) {
       response.writeHead(401, { "content-type": "application/json" });
@@ -129,6 +129,13 @@ const server = createServer((request, response) => {
       response.end(JSON.stringify({ success: false, message: "fixture upstream authorization detail" }));
       return;
     }
+    if (ecosystem.mode === "client-not-allowed" || ecosystem.mode === "identity-not-linked" || ecosystem.mode === "missing-scope") {
+      const reason = ecosystem.mode === "client-not-allowed" ? "ecosystem_client_not_allowed"
+        : ecosystem.mode === "identity-not-linked" ? "ecosystem_identity_not_linked" : "insufficient_scope";
+      response.writeHead(403, { "content-type": "application/json" });
+      response.end(JSON.stringify({ code: 403, reason }));
+      return;
+    }
     if (ecosystem.mode === "unavailable" || (ecosystem.mode === "retry" && ecosystem.accountRequestCount === 1)) {
       response.writeHead(503, { "content-type": "application/json" });
       response.end(JSON.stringify({ success: false, message: "fixture upstream deployment detail" }));
@@ -137,20 +144,21 @@ const server = createServer((request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(
       JSON.stringify({
-        success: true,
+        ...(url.pathname.startsWith("/api/v1/") ? { code: 0 } : { success: true }),
         data: { id: 42, username: "fixture-new-api-account" },
       }),
     );
     return;
   }
 
-  if (url.pathname === "/api/ecosystem/models") {
+  if (url.pathname === "/api/ecosystem/models" || url.pathname === "/api/v1/ecosystem/models") {
     if (!request.headers.authorization?.startsWith("Bearer fixture-access-token")) {
       response.writeHead(401, { "content-type": "application/json" });
       response.end(JSON.stringify({ success: false, message: "fixture bearer token rejected" }));
       return;
     }
     response.writeHead(200, { "content-type": "application/json" });
+    const isSub2ApiRoute = url.pathname.startsWith("/api/v1/");
     const body =
       ecosystem.mode === "malformed-models"
         ? { success: true, data: [{ id: 42 }, null] }
@@ -158,22 +166,42 @@ const server = createServer((request, response) => {
           ? { success: true, data: ["gpt-5.2", "gemini-3-pro"] }
         : ecosystem.mode === "malformed-model-envelope"
           ? { data: availableModels }
-          : { success: true, data: availableModels };
+          : {
+              success: true,
+              data: isSub2ApiRoute
+                ? availableModels.map((model) => ({ group_id: 1, model, platform: "openai" }))
+                : availableModels,
+            };
+    if (isSub2ApiRoute && body.success === true) {
+      delete body.success;
+      body.code = 0;
+    }
     response.end(JSON.stringify(body));
     return;
   }
 
-  if (url.pathname === "/api/ecosystem/tokens") {
+  if (
+    url.pathname === "/api/ecosystem/tokens" ||
+    url.pathname === "/api/v1/ecosystem/tokens" ||
+    url.pathname === "/api/v1/ecosystem/keys"
+  ) {
     if (!request.headers.authorization?.startsWith("Bearer fixture-access-token")) {
       response.writeHead(401, { "content-type": "application/json" });
       response.end(JSON.stringify({ success: false, message: "fixture bearer token rejected" }));
       return;
     }
     response.writeHead(200, { "content-type": "application/json" });
+    const isSub2ApiRoute = url.pathname.startsWith("/api/v1/");
     const credentials =
-      ecosystem.mode === "multiple-credentials"
+      ecosystem.mode === "multiple-credentials" || ecosystem.mode === "paginated-keys"
         ? [singleCredential, secondaryCredential]
         : [singleCredential];
+    const sub2ApiCredentials = credentials.map((credential) => ({
+      group_id: credential.group === "default" ? 1 : 2,
+      id: credential.token_id,
+      key: credential.api_key,
+      name: credential.token_name,
+    }));
     const body =
       ecosystem.mode === "inactive"
         ? { success: true, data: [] }
@@ -192,7 +220,16 @@ const server = createServer((request, response) => {
             }
           : ecosystem.mode === "malformed-token-envelope"
             ? { data: credentials }
-            : { success: true, data: credentials };
+          : { success: true, data: isSub2ApiRoute ? sub2ApiCredentials : credentials };
+    if (isSub2ApiRoute && body.success === true) {
+      delete body.success;
+      body.code = 0;
+      body.data = { items: body.data, page: 1, pages: 1, page_size: 100, total: body.data.length };
+      if (ecosystem.mode === "paginated-keys") {
+        const page = Number(url.searchParams.get("page") ?? 1);
+        body.data = { items: sub2ApiCredentials.slice(page - 1, page), page, pages: 2, page_size: 1, total: 2 };
+      }
+    }
     response.end(JSON.stringify(body));
     return;
   }
