@@ -114,7 +114,7 @@ export function codexModels(modelNames: string[]) {
 }
 
 export function selectCodexModel(modelNames: string[]) {
-  return codexModels(modelNames)[0];
+  return codexModels(modelNames).at(-1);
 }
 
 function escapeTomlBasicString(value: string) {

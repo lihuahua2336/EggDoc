@@ -92,7 +92,7 @@ test("English configuration uses the English Codex instruction", () => {
   );
 });
 
-test("Codex defaults to the first available GPT model and preserves the provider order", () => {
+test("Codex defaults to the last available GPT model and preserves the provider order", () => {
   expect(codexModels(["gemini-3-pro", "gpt-5.9", "openai/gpt-5.10-codex"])).toEqual([
     "gpt-5.9", "openai/gpt-5.10-codex",
   ]);
@@ -103,6 +103,6 @@ test("Codex defaults to the first available GPT model and preserves the provider
       "openai/gpt-5.10-codex",
       "claude-sonnet-5",
     ]),
-  ).toBe("gpt-5.9");
+  ).toBe("openai/gpt-5.10-codex");
   expect(selectCodexModel(["claude-sonnet-5", "gemini-3-pro"])).toBeUndefined();
 });
